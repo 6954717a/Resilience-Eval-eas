@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="doc/imgs/static/logo.png" alt="Resilience Evaluation Layer for Embodied Agent Systems logo" width="130"/>
+  <img src="doc/imgs/static/logo.png" alt="Resilience Evaluation logo" width="130"/>
 </p>
 
-<h1 align="center">Resilience Evaluation Layer for Embodied Agent Systems</h1>
+<h1 align="center">Resilience Evaluation</h1>
 
 <p align="center">
-  <b>Process-aware evaluation for embodied agents: rebound, stability, and graceful extensibility.</b>
+  <b>A process-aware evaluation layer applied to embodied agent systems: rebound, stability, and graceful extensibility.</b>
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@
 
 **Motivation:** Outcome centric metrics as Success rate tells whether an embodied-agent episode ended well. It does not tell whether the agent recovered cheaply, stayed stable under small perturbations, or maintained bounded behavior as task stress increased. Two agents can reach the same outcome while taking very different resilience paths.
 
-**Resilience Metrics for EAS:** We gain insight from the *resilience-engineering* concepts to EAS groundings and propose a novel resilience evaluation framework that can be flexibly applied to any EAS. This repository packages the code, result tables, and figure assets for a **Resilience Evaluation Layer** that instruments embodied-agent execution and turns process traces into three complementary resilience aspects according to Resilience Engineering science: Rebound, Stability and Graceful Extensibility.
+**Resilience Evaluation Framework:** We draw on *resilience-engineering* concepts to define a reusable, process-aware evaluation framework. This repository applies the framework to embodied agent systems (EAS), packaging the code, result tables, and figure assets for a **Resilience Evaluation Layer** that instruments embodied-agent execution and turns process traces into three complementary resilience aspects: Rebound, Stability, and Graceful Extensibility.
 
 - **Rebound:** how costly it is to recover after a local disruption.
 - **Stability:** how sensitive the policy and value trajectory are to small perturbations.
@@ -156,8 +156,8 @@ The GE row is deliberately labeled as pilot evidence. The benchmark and validity
 Install the package dependencies:
 
 ```bash
-git clone -c core.longpaths=true https://github.com/YOUR_GITHUB_ORG/resilience-evaluation-layer.git EAS-REL
-cd EAS-REL
+git clone -c core.longpaths=true https://github.com/YOUR_GITHUB_ORG/resilience-evaluation.git ResEval
+cd ResEval
 
 conda create -n resilience python=3.10
 conda activate resilience
@@ -196,7 +196,7 @@ python Analysis_Code/theory_process/run_analysis_2026-01-18_rebound.py
 We follow the Habitat-LLM infrastructure, and form our evaluation layer based on the simulator. The **inner** `ResilienceEvaluationLayer/` directory is the main package where environments setup, EAS executes tasks, resilience probes, metric code, Hydra experiment configs, and aggregation entry points live.
 
 ```text
-resilience-evaluation-layer/                       # repository root (use EAS-REL locally on Windows)
+resilience-evaluation/                             # repository root (use ResEval locally on Windows)
 |-- ResilienceEvaluationLayer/                     # core package: sim + planners + resilience evaluation
 |   |-- evaluation/                                # process-aware evaluation layer (primary)
 |   |   |-- metrics/                               # rebound/, stability/, extensibility/, degradation/

@@ -6,10 +6,11 @@ This is a `software-git` research-artifact repository. It combines a Python
 evaluation stack, packaged experiment evidence, analysis scripts, generated
 figures, and reproduction material.
 
-The public repository slug is `resilience-evaluation-layer`; the display name is
-**Resilience Evaluation Layer for Embodied Agent Systems**. On Windows, clone it
-into the short local directory `EAS-REL` because packaged evidence contains long
-relative paths.
+The public repository slug is `resilience-evaluation`; the display name is
+**Resilience Evaluation**. Embodied Agent Systems (EAS) are the current
+application target, not part of the core project name. On Windows, clone the
+repository into the short local directory `ResEval` because packaged evidence
+contains long relative paths.
 
 ## Primary deliverables and entry points
 

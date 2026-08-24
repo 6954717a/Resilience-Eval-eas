@@ -11,11 +11,11 @@
 ## Step 1: Clone Repository
 
 ```bash
-git clone -c core.longpaths=true https://github.com/YOUR_GITHUB_ORG/resilience-evaluation-layer.git EAS-REL
-cd EAS-REL
+git clone -c core.longpaths=true https://github.com/YOUR_GITHUB_ORG/resilience-evaluation.git ResEval
+cd ResEval
 ```
 
-The explicit `EAS-REL` destination keeps the packaged evidence paths below
+The explicit `ResEval` destination keeps the packaged evidence paths below
 Windows' legacy path-length limit. The clone option also enables Git's long-path
 handling for the new checkout.
 
