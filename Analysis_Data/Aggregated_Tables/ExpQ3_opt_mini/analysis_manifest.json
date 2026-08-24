@@ -1,0 +1,52 @@
+{
+  "main_run": "D:\\Proj\\Framework\\Data_Exper\\ExpQ3\\2026-05-01_09-01-41-val_mini.json",
+  "ge_pilot_run": "D:\\Proj\\Framework\\Data_Exper\\Exp0430\\exp3\\2026-05-01_01-11-05-val_mini.json",
+  "ge_closure_run": "D:\\Proj\\Framework\\Data_Exper\\Exp0430\\2026-04-30_04-07-07-val_mini.json",
+  "ge_closure_capacity_rows": [
+    {
+      "condition_label": "default",
+      "condition_name": "default",
+      "evolve_step": "0",
+      "family": "placement_only",
+      "ge_audc_f": "1.016219807161631",
+      "ge_audc_norm_f": "1.016219807161631",
+      "ge_boundary_lambda_star": "1.0",
+      "ge_cliff_flag": "1",
+      "ge_cliff_lambda": "0.6",
+      "ge_coverage_warning": "0",
+      "ge_cpsc_lambda_star": "1.0",
+      "ge_hard_lambda_star": "1.0",
+      "ge_margin_drop_f": "-0.4703610199633659",
+      "ge_max_degradation_rate": "1.8822837208319596",
+      "ge_monotonicity_violations": "4",
+      "ge_valid_cell_count": "6",
+      "ge_valid_lambda_coverage": "1.0",
+      "task_family": "placement_only"
+    },
+    {
+      "condition_label": "default",
+      "condition_name": "default",
+      "evolve_step": "0",
+      "family": "spatial_relation",
+      "ge_audc_f": "0.5367465518646957",
+      "ge_audc_norm_f": "0.5367465518646957",
+      "ge_boundary_lambda_star": "",
+      "ge_cliff_flag": "1",
+      "ge_cliff_lambda": "0.4",
+      "ge_coverage_warning": "0",
+      "ge_cpsc_lambda_star": "",
+      "ge_hard_lambda_star": "",
+      "ge_margin_drop_f": "0.11654454115533674",
+      "ge_max_degradation_rate": "1.6289539690187431",
+      "ge_monotonicity_violations": "3",
+      "ge_valid_cell_count": "6",
+      "ge_valid_lambda_coverage": "1.0",
+      "task_family": "spatial_relation"
+    }
+  ],
+  "outputs": {
+    "table_tex": "D:\\Proj\\Framework\\Data_Exper\\ExpQ3\\tables\\expq3_targeted_improvements_table.tex",
+    "summary_csv": "D:\\Proj\\Framework\\Data_Exper\\ExpQ3\\tables\\expq3_targeted_improvements.csv",
+    "selected_cases_csv": "D:\\Proj\\Framework\\Data_Exper\\ExpQ3\\tables\\expq3_selected_cases.csv"
+  }
+}

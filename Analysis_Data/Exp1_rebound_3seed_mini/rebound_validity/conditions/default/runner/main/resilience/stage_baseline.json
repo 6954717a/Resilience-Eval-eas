@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "stages": [
+    {
+      "family": "placement_only",
+      "stage": 0,
+      "modality": "planning",
+      "tau_star": 1.0,
+      "T_bar": {
+        "pln": 0.0,
+        "per": 0.1,
+        "coord": 0.0,
+        "nav": 0.0,
+        "man": 0.0,
+        "redo": 0.0
+      },
+      "delta_p_bar": 0.5,
+      "delta_q_bar": 0.5,
+      "r_bar": 0.0,
+      "W_rem_seg_bar": 44.5,
+      "W_rem_star_swe": 44.5,
+      "by_dim": {
+        "plan": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 44.5
+        },
+        "sim": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 44.5
+        },
+        "runtime": {
+          "tau_bar": 0.0,
+          "W_rem_seg_bar": 0.0
+        }
+      },
+      "v_bar_channels": {
+        "pln": 0.0,
+        "per": 1.0,
+        "coord": 0.0
+      },
+      "n_samples": 408
+    },
+    {
+      "family": "spatial_relation",
+      "stage": 0,
+      "modality": "planning",
+      "tau_star": 1.0,
+      "T_bar": {
+        "pln": 0.0,
+        "per": 0.1,
+        "coord": 0.0,
+        "nav": 0.0,
+        "man": 0.0,
+        "redo": 0.0
+      },
+      "delta_p_bar": 1.0,
+      "delta_q_bar": 1.0,
+      "r_bar": 0.0,
+      "W_rem_seg_bar": 48.0,
+      "W_rem_star_swe": 48.0,
+      "by_dim": {
+        "plan": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 48.0
+        },
+        "sim": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 48.0
+        },
+        "runtime": {
+          "tau_bar": 0.0,
+          "W_rem_seg_bar": 0.0
+        }
+      },
+      "v_bar_channels": {
+        "pln": 0.0,
+        "per": 1.0,
+        "coord": 0.0
+      },
+      "n_samples": 95
+    },
+    {
+      "family": "placement_only",
+      "stage": 1,
+      "modality": "planning",
+      "tau_star": 1.0,
+      "T_bar": {
+        "pln": 0.0,
+        "per": 0.0,
+        "coord": 0.0,
+        "nav": 0.0,
+        "man": 0.0,
+        "redo": 0.0
+      },
+      "delta_p_bar": 0.2,
+      "delta_q_bar": 0.2,
+      "r_bar": 0.0,
+      "W_rem_seg_bar": 11.0,
+      "W_rem_star_swe": 13.0,
+      "by_dim": {
+        "plan": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 11.0
+        },
+        "sim": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 11.0
+        },
+        "runtime": {
+          "tau_bar": 0.0,
+          "W_rem_seg_bar": 0.0
+        }
+      },
+      "v_bar_channels": {
+        "pln": 0.0,
+        "per": 0.0,
+        "coord": 0.0
+      },
+      "n_samples": 42
+    },
+    {
+      "family": "placement_only",
+      "stage": -1,
+      "modality": "planning",
+      "tau_star": 1.0,
+      "T_bar": {
+        "pln": 0.05,
+        "per": 0.05,
+        "coord": 0.0,
+        "nav": 0.0,
+        "man": 0.0,
+        "redo": 0.0
+      },
+      "delta_p_bar": 0.5,
+      "delta_q_bar": 0.5,
+      "r_bar": 0.0,
+      "W_rem_seg_bar": 1.5,
+      "W_rem_star_swe": 1.5,
+      "by_dim": {
+        "plan": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 1.5
+        },
+        "sim": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 1.5
+        },
+        "runtime": {
+          "tau_bar": 0.0,
+          "W_rem_seg_bar": 0.0
+        }
+      },
+      "v_bar_channels": {
+        "pln": 0.5,
+        "per": 0.5,
+        "coord": 0.0
+      },
+      "n_samples": 2
+    },
+    {
+      "family": "placement_only",
+      "stage": 4,
+      "modality": "planning",
+      "tau_star": 3.5,
+      "T_bar": {
+        "pln": 0.0,
+        "per": 0.05,
+        "coord": 0.0,
+        "nav": 0.0,
+        "man": 0.0,
+        "redo": 0.0
+      },
+      "delta_p_bar": 0.20000000000000007,
+      "delta_q_bar": 0.20000000000000007,
+      "r_bar": 0.0,
+      "W_rem_seg_bar": 1.5,
+      "W_rem_star_swe": 1.5,
+      "by_dim": {
+        "plan": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 1.5
+        },
+        "sim": {
+          "tau_bar": 3.5,
+          "W_rem_seg_bar": 5.25
+        },
+        "runtime": {
+          "tau_bar": 0.0,
+          "W_rem_seg_bar": 0.0
+        }
+      },
+      "v_bar_channels": {
+        "pln": 0.0,
+        "per": 0.5,
+        "coord": 0.0
+      },
+      "n_samples": 2
+    }
+  ],
+  "metadata": {
+    "baseline_kind": "hash_run_local",
+    "signature": {
+      "dataset_path": "data/datasets/partnr_episodes/v0_0/val_mini.json.gz",
+      "episode_ids": [
+        "78",
+        "127",
+        "126",
+        "11",
+        "79",
+        "80",
+        "81"
+      ],
+      "clean_specs": [
+        "clean@seed=0@lambda=1.00"
+      ],
+      "seeds": [
+        0
+      ],
+      "intensities": [
+        1.0
+      ],
+      "baseline_json": "stage_baseline.json",
+      "output_subdir": "resilience",
+      "signature": "f7ef3cd88ec2",
+      "archive_filename": "stage_baseline__val_mini.json__eps-78_127_126_11_79_80-etc__s-0__f7ef3cd88ec2.json"
+    },
+    "estimator_stats": {
+      "total_records": 556,
+      "export_file_count": 7,
+      "episode_export_counts": {
+        "11": 1,
+        "126": 1,
+        "127": 1,
+        "78": 1,
+        "79": 1,
+        "80": 1,
+        "81": 1
+      },
+      "episode_record_counts": {
+        "11": 96,
+        "126": 96,
+        "127": 96,
+        "78": 35,
+        "79": 41,
+        "80": 96,
+        "81": 96
+      }
+    }
+  }
+}

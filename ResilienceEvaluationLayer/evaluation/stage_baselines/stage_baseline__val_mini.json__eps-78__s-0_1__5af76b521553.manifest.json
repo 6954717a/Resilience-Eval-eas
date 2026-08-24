@@ -1,0 +1,34 @@
+{
+  "baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-22_03-49-23-val_mini.json/results/resilience/stage_baseline.json",
+  "preferred_baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-78__s-0_1__5af76b521553.json",
+  "persistent_baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-78__s-0_1__5af76b521553.json",
+  "latest_alias_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline_latest.json",
+  "clean_spec_tags": [
+    "clean@seed=0@lambda=1.00",
+    "clean@seed=1@lambda=1.00"
+  ],
+  "export_file_count": 2,
+  "anchor_group_count": 1,
+  "baseline_entry_count": 1,
+  "signature": {
+    "dataset_path": "data/datasets/partnr_episodes/v0_0/val_mini.json.gz",
+    "episode_ids": [
+      "78"
+    ],
+    "clean_specs": [
+      "clean@seed=0@lambda=1.00",
+      "clean@seed=1@lambda=1.00"
+    ],
+    "seeds": [
+      0,
+      1
+    ],
+    "intensities": [
+      1.0
+    ],
+    "baseline_json": "stage_baseline.json",
+    "output_subdir": "resilience",
+    "signature": "5af76b521553",
+    "archive_filename": "stage_baseline__val_mini.json__eps-78__s-0_1__5af76b521553.json"
+  }
+}

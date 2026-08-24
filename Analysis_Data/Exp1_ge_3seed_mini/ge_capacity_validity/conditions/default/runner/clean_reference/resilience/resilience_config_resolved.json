@@ -1,0 +1,1498 @@
+{
+  "resilience": {
+    "mode": "margin",
+    "perturbations": [
+      "clean"
+    ],
+    "seeds": [
+      0
+    ],
+    "intensities": [
+      0.0
+    ],
+    "output_subdir": "resilience",
+    "baseline_json": "stage_baseline.json",
+    "alpha": 0.5,
+    "beta_weight_vv": 0.5,
+    "beta_weight_out": 0.5,
+    "stage_baseline": {
+      "enabled": true,
+      "baseline_only": false,
+      "clean_tag": "clean",
+      "write_persistent_copy": true,
+      "persistent_store_dir": "evaluation/stage_baselines",
+      "latest_alias": "stage_baseline_latest.json",
+      "episode_aggregate": {
+        "enabled": true,
+        "subdir": "episode_aggregates",
+        "merge_existing": true,
+        "fallback_when_hash_missing": true,
+        "allow_partial_compose": true
+      }
+    },
+    "contract_margin": {
+      "tau_pc": 0.7,
+      "tau_q": 0.7,
+      "tau_rec": 35.0,
+      "tau_stab": 0.2,
+      "tau_safe": 0.05,
+      "quantile_alpha": 0.25,
+      "bottom_k": 2,
+      "ratio_clip_max": 2.0,
+      "hard_gate_delta": 0.05,
+      "degradation_rate_threshold": 1.0,
+      "missing_safety_policy": "assume_zero",
+      "missing_safety_default": 0.0,
+      "stress_lambdas": [
+        0.6,
+        0.8,
+        1.0
+      ]
+    }
+  },
+  "specs": [
+    {
+      "kind": "clean",
+      "seed": 0,
+      "intensity": 0.0,
+      "extras": {}
+    }
+  ],
+  "executed_specs": [
+    {
+      "kind": "clean",
+      "seed": 0,
+      "intensity": 0.0,
+      "extras": {}
+    }
+  ],
+  "stage_baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+  "stage_baseline_exists": true,
+  "postprocess_modes": [],
+  "episode_aggregate_fallback_path": null,
+  "stage_baseline_startup_resolution": {
+    "signature": {
+      "dataset_path": "data/datasets/partnr_episodes/v0_0/val_mini.json.gz",
+      "episode_ids": [
+        "126",
+        "127",
+        "78",
+        "129",
+        "125",
+        "1",
+        "9",
+        "60",
+        "11",
+        "79",
+        "80",
+        "81"
+      ],
+      "clean_specs": [
+        "clean@seed=0@lambda=0.00"
+      ],
+      "seeds": [
+        0
+      ],
+      "intensities": [
+        0.0
+      ],
+      "baseline_json": "stage_baseline.json",
+      "output_subdir": "resilience",
+      "signature": "00cf5a3b6fd1",
+      "archive_filename": "stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json"
+    },
+    "run_local_hash_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/stage_baseline.json",
+    "run_local_hash_exists": false,
+    "persistent_hash_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+    "persistent_hash_exists": true,
+    "episode_aggregate_enabled": true,
+    "source": "persistent_hash",
+    "selected_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+    "fallback_reason": "",
+    "selected_path_exists": true
+  },
+  "episode_aggregate_incremental_updates": [
+    {
+      "episode_aggregate_root": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates",
+      "episode_baseline_paths": {
+        "11": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_11/stage_baseline.json",
+        "125": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_125/stage_baseline.json",
+        "126": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_126/stage_baseline.json",
+        "127": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_127/stage_baseline.json",
+        "129": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_129/stage_baseline.json",
+        "1": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_1/stage_baseline.json",
+        "60": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_60/stage_baseline.json",
+        "78": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_78/stage_baseline.json",
+        "79": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_79/stage_baseline.json",
+        "80": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_80/stage_baseline.json",
+        "81": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_81/stage_baseline.json",
+        "9": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/episode_9/stage_baseline.json"
+      },
+      "episode_aggregate_composed_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/episode_aggregates/val_mini.json/composed/stage_baseline__eps-126_127_78_129_125_1-etc__13937061ab__episode_aggregate.json",
+      "episode_aggregate_count": 12,
+      "per_episode_anchor_updates": {
+        "11": {
+          "existing_anchor_count": 4,
+          "incoming_anchor_count": 2,
+          "merged_anchor_count": 4,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 2,
+          "retained_anchor_count": 2,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 54,
+              "W_rem_star_swe": 29.5,
+              "W_rem_seg_bar": 27.5,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 18,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 53.22222222222222
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2376,
+              "W_rem_star_swe": 46.01893939393939,
+              "W_rem_seg_bar": 45.51136363636363,
+              "tau_star": 1.0
+            }
+          ],
+          "retained_anchors": [
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 38,
+              "W_rem_star_swe": 9.5,
+              "W_rem_seg_bar": 5.7894736842105265,
+              "tau_star": 6.473684210526316
+            },
+            {
+              "family": "placement_only",
+              "stage": 2,
+              "modality": "planning",
+              "n_samples": 21,
+              "W_rem_star_swe": 6.571428571428571,
+              "W_rem_seg_bar": 4.571428571428571,
+              "tau_star": 1.0
+            }
+          ],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 18,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 53.22222222222222
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2376,
+              "W_rem_star_swe": 46.01893939393939,
+              "W_rem_seg_bar": 45.51136363636363,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 38,
+              "W_rem_star_swe": 9.5,
+              "W_rem_seg_bar": 5.7894736842105265,
+              "tau_star": 6.473684210526316
+            },
+            {
+              "family": "placement_only",
+              "stage": 2,
+              "modality": "planning",
+              "n_samples": 21,
+              "W_rem_star_swe": 6.571428571428571,
+              "W_rem_seg_bar": 4.571428571428571,
+              "tau_star": 1.0
+            }
+          ]
+        },
+        "125": {
+          "existing_anchor_count": 3,
+          "incoming_anchor_count": 1,
+          "merged_anchor_count": 3,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 1,
+          "retained_anchor_count": 2,
+          "incoming_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 23,
+              "W_rem_star_swe": 12.0,
+              "W_rem_seg_bar": 12.0,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 588,
+              "W_rem_star_swe": 37.66156462585034,
+              "W_rem_seg_bar": 36.085034013605444,
+              "tau_star": 1.0442176870748299
+            }
+          ],
+          "retained_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 15,
+              "W_rem_star_swe": 4.8,
+              "W_rem_seg_bar": 4.8,
+              "tau_star": 6.933333333333334
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 29,
+              "W_rem_star_swe": 14.10344827586207,
+              "W_rem_seg_bar": 7.758620689655173,
+              "tau_star": 1.0
+            }
+          ],
+          "merged_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 15,
+              "W_rem_star_swe": 4.8,
+              "W_rem_seg_bar": 4.8,
+              "tau_star": 6.933333333333334
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 588,
+              "W_rem_star_swe": 37.66156462585034,
+              "W_rem_seg_bar": 36.085034013605444,
+              "tau_star": 1.0442176870748299
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 29,
+              "W_rem_star_swe": 14.10344827586207,
+              "W_rem_seg_bar": 7.758620689655173,
+              "tau_star": 1.0
+            }
+          ]
+        },
+        "126": {
+          "existing_anchor_count": 4,
+          "incoming_anchor_count": 4,
+          "merged_anchor_count": 4,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 4,
+          "retained_anchor_count": 0,
+          "incoming_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 33,
+              "W_rem_star_swe": 50.0,
+              "W_rem_seg_bar": 17.0,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 28,
+              "W_rem_star_swe": 19.5,
+              "W_rem_seg_bar": 14.5,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 2,
+              "modality": "planning",
+              "n_samples": 3,
+              "W_rem_star_swe": 4.0,
+              "W_rem_seg_bar": 2.0,
+              "tau_star": 6.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 18,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 1.6111111111111112
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2632,
+              "W_rem_star_swe": 46.33472644376899,
+              "W_rem_seg_bar": 44.58282674772036,
+              "tau_star": 1.3860182370820666
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 195,
+              "W_rem_star_swe": 30.328205128205127,
+              "W_rem_seg_bar": 24.56923076923077,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 2,
+              "modality": "planning",
+              "n_samples": 54,
+              "W_rem_star_swe": 23.11111111111111,
+              "W_rem_seg_bar": 21.11111111111111,
+              "tau_star": 12.333333333333334
+            }
+          ],
+          "retained_anchors": [],
+          "merged_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 18,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 1.6111111111111112
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2632,
+              "W_rem_star_swe": 46.33472644376899,
+              "W_rem_seg_bar": 44.58282674772036,
+              "tau_star": 1.3860182370820666
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 195,
+              "W_rem_star_swe": 30.328205128205127,
+              "W_rem_seg_bar": 24.56923076923077,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 2,
+              "modality": "planning",
+              "n_samples": 54,
+              "W_rem_star_swe": 23.11111111111111,
+              "W_rem_seg_bar": 21.11111111111111,
+              "tau_star": 12.333333333333334
+            }
+          ]
+        },
+        "127": {
+          "existing_anchor_count": 2,
+          "incoming_anchor_count": 1,
+          "merged_anchor_count": 2,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 1,
+          "retained_anchor_count": 1,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 95,
+              "W_rem_star_swe": 48.0,
+              "W_rem_seg_bar": 48.0,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2715,
+              "W_rem_star_swe": 45.032780847145474,
+              "W_rem_seg_bar": 44.81583793738489,
+              "tau_star": 1.0887661141804785
+            }
+          ],
+          "retained_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 36,
+              "W_rem_star_swe": 1.916666666666667,
+              "W_rem_seg_bar": 1.916666666666667,
+              "tau_star": 42.94444444444444
+            }
+          ],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 36,
+              "W_rem_star_swe": 1.916666666666667,
+              "W_rem_seg_bar": 1.916666666666667,
+              "tau_star": 42.94444444444444
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2715,
+              "W_rem_star_swe": 45.032780847145474,
+              "W_rem_seg_bar": 44.81583793738489,
+              "tau_star": 1.0887661141804785
+            }
+          ]
+        },
+        "129": {
+          "existing_anchor_count": 4,
+          "incoming_anchor_count": 3,
+          "merged_anchor_count": 4,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 3,
+          "retained_anchor_count": 1,
+          "incoming_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 150.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 23,
+              "W_rem_star_swe": 36.0,
+              "W_rem_seg_bar": 12.0,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 22,
+              "W_rem_star_swe": 13.5,
+              "W_rem_seg_bar": 11.5,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 4,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 104.75
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 646,
+              "W_rem_star_swe": 47.080495356037154,
+              "W_rem_seg_bar": 43.6733746130031,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 135,
+              "W_rem_star_swe": 30.185185185185187,
+              "W_rem_seg_bar": 29.385185185185186,
+              "tau_star": 1.0
+            }
+          ],
+          "retained_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": 4,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 14.5
+            }
+          ],
+          "merged_anchors": [
+            {
+              "family": "spatial_relation",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 4,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 104.75
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 646,
+              "W_rem_star_swe": 47.080495356037154,
+              "W_rem_seg_bar": 43.6733746130031,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 135,
+              "W_rem_star_swe": 30.185185185185187,
+              "W_rem_seg_bar": 29.385185185185186,
+              "tau_star": 1.0
+            },
+            {
+              "family": "spatial_relation",
+              "stage": 4,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 14.5
+            }
+          ]
+        },
+        "1": {
+          "existing_anchor_count": 3,
+          "incoming_anchor_count": 3,
+          "merged_anchor_count": 3,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 3,
+          "retained_anchor_count": 0,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 4,
+              "W_rem_star_swe": 3.0,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 19.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 27,
+              "W_rem_star_swe": 24.0,
+              "W_rem_seg_bar": 14.0,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 6,
+              "W_rem_star_swe": 7.5,
+              "W_rem_seg_bar": 2.5,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 9,
+              "W_rem_star_swe": 2.3333333333333335,
+              "W_rem_seg_bar": 1.3333333333333333,
+              "tau_star": 76.22222222222223
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 635,
+              "W_rem_star_swe": 44.883464566929135,
+              "W_rem_seg_bar": 44.1007874015748,
+              "tau_star": 1.2992125984251968
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 18,
+              "W_rem_star_swe": 5.555555555555555,
+              "W_rem_seg_bar": 3.0,
+              "tau_star": 6.888888888888889
+            }
+          ],
+          "retained_anchors": [],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 9,
+              "W_rem_star_swe": 2.3333333333333335,
+              "W_rem_seg_bar": 1.3333333333333333,
+              "tau_star": 76.22222222222223
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 635,
+              "W_rem_star_swe": 44.883464566929135,
+              "W_rem_seg_bar": 44.1007874015748,
+              "tau_star": 1.2992125984251968
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 18,
+              "W_rem_star_swe": 5.555555555555555,
+              "W_rem_seg_bar": 3.0,
+              "tau_star": 6.888888888888889
+            }
+          ]
+        },
+        "60": {
+          "existing_anchor_count": 3,
+          "incoming_anchor_count": 3,
+          "merged_anchor_count": 3,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 3,
+          "retained_anchor_count": 0,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 187.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 14,
+              "W_rem_star_swe": 15.5,
+              "W_rem_seg_bar": 7.5,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 6,
+              "W_rem_star_swe": 5.5,
+              "W_rem_seg_bar": 3.5,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 12,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 77.08333333333333
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 417,
+              "W_rem_star_swe": 42.05755395683453,
+              "W_rem_seg_bar": 36.54676258992806,
+              "tau_star": 1.460431654676259
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 123,
+              "W_rem_star_swe": 30.260162601626018,
+              "W_rem_seg_bar": 29.59349593495935,
+              "tau_star": 1.0
+            }
+          ],
+          "retained_anchors": [],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 12,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 77.08333333333333
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 417,
+              "W_rem_star_swe": 42.05755395683453,
+              "W_rem_seg_bar": 36.54676258992806,
+              "tau_star": 1.460431654676259
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 123,
+              "W_rem_star_swe": 30.260162601626018,
+              "W_rem_seg_bar": 29.59349593495935,
+              "tau_star": 1.0
+            }
+          ]
+        },
+        "78": {
+          "existing_anchor_count": 3,
+          "incoming_anchor_count": 3,
+          "merged_anchor_count": 3,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 3,
+          "retained_anchor_count": 0,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 50.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 9,
+              "W_rem_star_swe": 12.0,
+              "W_rem_seg_bar": 5.0,
+              "tau_star": 115.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 5,
+              "W_rem_star_swe": 5.0,
+              "W_rem_seg_bar": 3.0,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 28,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 35.642857142857146
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2971,
+              "W_rem_star_swe": 46.18108381016493,
+              "W_rem_seg_bar": 45.41736788959947,
+              "tau_star": 1.6449007068327162
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 108,
+              "W_rem_star_swe": 8.583333333333334,
+              "W_rem_seg_bar": 6.583333333333333,
+              "tau_star": 1.0
+            }
+          ],
+          "retained_anchors": [],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 28,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 35.642857142857146
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2971,
+              "W_rem_star_swe": 46.18108381016493,
+              "W_rem_seg_bar": 45.41736788959947,
+              "tau_star": 1.6449007068327162
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 108,
+              "W_rem_star_swe": 8.583333333333334,
+              "W_rem_seg_bar": 6.583333333333333,
+              "tau_star": 1.0
+            }
+          ]
+        },
+        "79": {
+          "existing_anchor_count": 6,
+          "incoming_anchor_count": 3,
+          "merged_anchor_count": 6,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 3,
+          "retained_anchor_count": 3,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 33,
+              "W_rem_star_swe": 79.0,
+              "W_rem_seg_bar": 17.0,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 38,
+              "W_rem_star_swe": 43.5,
+              "W_rem_seg_bar": 19.5,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 2,
+              "modality": "planning",
+              "n_samples": 24,
+              "W_rem_star_swe": 12.5,
+              "W_rem_seg_bar": 12.5,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2417,
+              "W_rem_star_swe": 47.73562267273479,
+              "W_rem_seg_bar": 45.95531650806786,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 110,
+              "W_rem_star_swe": 27.763636363636362,
+              "W_rem_seg_bar": 12.6,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 2,
+              "modality": "planning",
+              "n_samples": 57,
+              "W_rem_star_swe": 12.75438596491228,
+              "W_rem_seg_bar": 7.684210526315789,
+              "tau_star": 1.0
+            }
+          ],
+          "retained_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 12,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 53.5
+            },
+            {
+              "family": "placement_only",
+              "stage": 3,
+              "modality": "planning",
+              "n_samples": 29,
+              "W_rem_star_swe": 9.793103448275861,
+              "W_rem_seg_bar": 3.413793103448276,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 4,
+              "modality": "planning",
+              "n_samples": 24,
+              "W_rem_star_swe": 4.958333333333333,
+              "W_rem_seg_bar": 3.125,
+              "tau_star": 1.2083333333333333
+            }
+          ],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 12,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 53.5
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 2417,
+              "W_rem_star_swe": 47.73562267273479,
+              "W_rem_seg_bar": 45.95531650806786,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 110,
+              "W_rem_star_swe": 27.763636363636362,
+              "W_rem_seg_bar": 12.6,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 2,
+              "modality": "planning",
+              "n_samples": 57,
+              "W_rem_star_swe": 12.75438596491228,
+              "W_rem_seg_bar": 7.684210526315789,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 3,
+              "modality": "planning",
+              "n_samples": 29,
+              "W_rem_star_swe": 9.793103448275861,
+              "W_rem_seg_bar": 3.413793103448276,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 4,
+              "modality": "planning",
+              "n_samples": 24,
+              "W_rem_star_swe": 4.958333333333333,
+              "W_rem_seg_bar": 3.125,
+              "tau_star": 1.2083333333333333
+            }
+          ]
+        },
+        "80": {
+          "existing_anchor_count": 3,
+          "incoming_anchor_count": 3,
+          "merged_anchor_count": 3,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 3,
+          "retained_anchor_count": 0,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 3,
+              "W_rem_star_swe": 2.0,
+              "W_rem_seg_bar": 1.0,
+              "tau_star": 52.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 10,
+              "W_rem_star_swe": 14.5,
+              "W_rem_seg_bar": 5.5,
+              "tau_star": 32.5
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 6,
+              "W_rem_star_swe": 6.5,
+              "W_rem_seg_bar": 2.5,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 27,
+              "W_rem_star_swe": 1.6666666666666667,
+              "W_rem_seg_bar": 1.3333333333333333,
+              "tau_star": 41.407407407407405
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 1788,
+              "W_rem_star_swe": 45.04697986577181,
+              "W_rem_seg_bar": 44.18456375838926,
+              "tau_star": 1.4054809843400446
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 79,
+              "W_rem_star_swe": 8.265822784810126,
+              "W_rem_seg_bar": 5.177215189873418,
+              "tau_star": 1.0
+            }
+          ],
+          "retained_anchors": [],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 27,
+              "W_rem_star_swe": 1.6666666666666667,
+              "W_rem_seg_bar": 1.3333333333333333,
+              "tau_star": 41.407407407407405
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 1788,
+              "W_rem_star_swe": 45.04697986577181,
+              "W_rem_seg_bar": 44.18456375838926,
+              "tau_star": 1.4054809843400446
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 79,
+              "W_rem_star_swe": 8.265822784810126,
+              "W_rem_seg_bar": 5.177215189873418,
+              "tau_star": 1.0
+            }
+          ]
+        },
+        "81": {
+          "existing_anchor_count": 3,
+          "incoming_anchor_count": 3,
+          "merged_anchor_count": 3,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 3,
+          "retained_anchor_count": 0,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 153.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 10,
+              "W_rem_star_swe": 12.5,
+              "W_rem_seg_bar": 5.5,
+              "tau_star": 5.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 5,
+              "W_rem_star_swe": 5.0,
+              "W_rem_seg_bar": 3.0,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 20,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 52.1
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 1901,
+              "W_rem_star_swe": 46.38032614413466,
+              "W_rem_seg_bar": 45.86428195686481,
+              "tau_star": 1.2872172540768017
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 75,
+              "W_rem_star_swe": 7.1066666666666665,
+              "W_rem_seg_bar": 5.1066666666666665,
+              "tau_star": 1.0
+            }
+          ],
+          "retained_anchors": [],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 20,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 52.1
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 1901,
+              "W_rem_star_swe": 46.38032614413466,
+              "W_rem_seg_bar": 45.86428195686481,
+              "tau_star": 1.2872172540768017
+            },
+            {
+              "family": "placement_only",
+              "stage": 1,
+              "modality": "planning",
+              "n_samples": 75,
+              "W_rem_star_swe": 7.1066666666666665,
+              "W_rem_seg_bar": 5.1066666666666665,
+              "tau_star": 1.0
+            }
+          ]
+        },
+        "9": {
+          "existing_anchor_count": 2,
+          "incoming_anchor_count": 2,
+          "merged_anchor_count": 2,
+          "new_anchor_count": 0,
+          "updated_anchor_count": 2,
+          "retained_anchor_count": 0,
+          "incoming_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 2,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 21,
+              "W_rem_star_swe": 13.0,
+              "W_rem_seg_bar": 11.0,
+              "tau_star": 1.0
+            }
+          ],
+          "new_anchors": [],
+          "updated_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 6,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 416,
+              "W_rem_star_swe": 36.91346153846154,
+              "W_rem_seg_bar": 36.57211538461539,
+              "tau_star": 1.0
+            }
+          ],
+          "retained_anchors": [],
+          "merged_anchors": [
+            {
+              "family": "placement_only",
+              "stage": -1,
+              "modality": "planning",
+              "n_samples": 6,
+              "W_rem_star_swe": 1.5,
+              "W_rem_seg_bar": 1.5,
+              "tau_star": 1.0
+            },
+            {
+              "family": "placement_only",
+              "stage": 0,
+              "modality": "planning",
+              "n_samples": 416,
+              "W_rem_star_swe": 36.91346153846154,
+              "W_rem_seg_bar": 36.57211538461539,
+              "tau_star": 1.0
+            }
+          ]
+        }
+      },
+      "composed_anchor_count": 11,
+      "composed_anchors": [
+        {
+          "family": "placement_only",
+          "stage": -1,
+          "modality": "planning",
+          "n_samples": 168,
+          "W_rem_star_swe": 1.6607142857142858,
+          "W_rem_seg_bar": 1.5535714285714286,
+          "tau_star": 47.14880952380952
+        },
+        {
+          "family": "placement_only",
+          "stage": 0,
+          "modality": "planning",
+          "n_samples": 15636,
+          "W_rem_star_swe": 45.68265541059094,
+          "W_rem_seg_bar": 44.79834996162702,
+          "tau_star": 1.2436684574059862
+        },
+        {
+          "family": "placement_only",
+          "stage": 1,
+          "modality": "planning",
+          "n_samples": 551,
+          "W_rem_star_swe": 16.969147005444647,
+          "W_rem_seg_bar": 12.346642468239564,
+          "tau_star": 1.5698729582577133
+        },
+        {
+          "family": "placement_only",
+          "stage": 2,
+          "modality": "planning",
+          "n_samples": 78,
+          "W_rem_star_swe": 11.08974358974359,
+          "W_rem_seg_bar": 6.846153846153846,
+          "tau_star": 1.0
+        },
+        {
+          "family": "placement_only",
+          "stage": 3,
+          "modality": "planning",
+          "n_samples": 29,
+          "W_rem_star_swe": 9.793103448275861,
+          "W_rem_seg_bar": 3.413793103448276,
+          "tau_star": 1.0
+        },
+        {
+          "family": "placement_only",
+          "stage": 4,
+          "modality": "planning",
+          "n_samples": 24,
+          "W_rem_star_swe": 4.958333333333333,
+          "W_rem_seg_bar": 3.125,
+          "tau_star": 1.2083333333333333
+        },
+        {
+          "family": "spatial_relation",
+          "stage": -1,
+          "modality": "planning",
+          "n_samples": 37,
+          "W_rem_star_swe": 2.8378378378378377,
+          "W_rem_seg_bar": 2.8378378378378377,
+          "tau_star": 14.91891891891892
+        },
+        {
+          "family": "spatial_relation",
+          "stage": 0,
+          "modality": "planning",
+          "n_samples": 3866,
+          "W_rem_star_swe": 45.14019658561821,
+          "W_rem_seg_bar": 43.13838592860838,
+          "tau_star": 1.2695292291774445
+        },
+        {
+          "family": "spatial_relation",
+          "stage": 1,
+          "modality": "planning",
+          "n_samples": 359,
+          "W_rem_star_swe": 28.963788300835656,
+          "W_rem_seg_bar": 25.022284122562674,
+          "tau_star": 1.0
+        },
+        {
+          "family": "spatial_relation",
+          "stage": 2,
+          "modality": "planning",
+          "n_samples": 54,
+          "W_rem_star_swe": 23.11111111111111,
+          "W_rem_seg_bar": 21.11111111111111,
+          "tau_star": 12.333333333333334
+        },
+        {
+          "family": "spatial_relation",
+          "stage": 4,
+          "modality": "planning",
+          "n_samples": 2,
+          "W_rem_star_swe": 1.5,
+          "W_rem_seg_bar": 1.5,
+          "tau_star": 14.5
+        }
+      ],
+      "update_kind": "incremental_clean_spec",
+      "clean_spec_tag": "clean@seed=0@lambda=0.00",
+      "source_export_count": 12,
+      "source_export_paths": [
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_11_episode_11_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_125_episode_125_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_126_episode_126_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_127_episode_127_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_129_episode_129_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_1_episode_1_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_60_episode_60_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_78_episode_78_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_79_episode_79_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_80_episode_80_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_81_episode_81_0.json",
+        "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/spec_clean_seed0_lambda0.00/val_mini.json.gz/analyses/critic_exports/critic_export-episode_9_episode_9_0.json"
+      ],
+      "updated_episode_count": 12,
+      "updated_anchor_count": 11,
+      "updated_at": "2026-04-30T05:43:50.345033+00:00"
+    }
+  ],
+  "episode_aggregate_refresh_resolutions": [
+    {
+      "signature": {
+        "dataset_path": "data/datasets/partnr_episodes/v0_0/val_mini.json.gz",
+        "episode_ids": [
+          "126",
+          "127",
+          "78",
+          "129",
+          "125",
+          "1",
+          "9",
+          "60",
+          "11",
+          "79",
+          "80",
+          "81"
+        ],
+        "clean_specs": [
+          "clean@seed=0@lambda=0.00"
+        ],
+        "seeds": [
+          0
+        ],
+        "intensities": [
+          0.0
+        ],
+        "baseline_json": "stage_baseline.json",
+        "output_subdir": "resilience",
+        "signature": "00cf5a3b6fd1",
+        "archive_filename": "stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json"
+      },
+      "run_local_hash_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/stage_baseline.json",
+      "run_local_hash_exists": false,
+      "persistent_hash_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+      "persistent_hash_exists": true,
+      "episode_aggregate_enabled": true,
+      "source": "persistent_hash",
+      "selected_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+      "fallback_reason": "",
+      "selected_path_exists": true
+    }
+  ]
+}

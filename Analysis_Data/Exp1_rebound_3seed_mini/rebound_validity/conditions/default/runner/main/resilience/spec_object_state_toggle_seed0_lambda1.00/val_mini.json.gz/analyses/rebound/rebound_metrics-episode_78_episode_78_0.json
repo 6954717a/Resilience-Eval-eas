@@ -1,0 +1,245 @@
+{
+  "episode_id": "78",
+  "episode_filename": "episode_78_0",
+  "rebound_metrics": {
+    "b_epi": 0.0,
+    "mttr": 0.0,
+    "mtbf": 1131.0,
+    "recovery_ratio": 1.0,
+    "t_rec": 0.0,
+    "retry_count": 0,
+    "backtrack_count": 0,
+    "replan_count": 0,
+    "context_summarize_count": 0,
+    "total_failures": 0,
+    "successful_recoveries": 0,
+    "failed_recoveries": 0,
+    "fault_distribution": {},
+    "rsr": 1.0,
+    "rtr": null,
+    "rstc": null,
+    "total_steps": 1131,
+    "episode_id": null,
+    "c_rec": 10.506358075551503,
+    "c_rec_plan": 4.06839467103222,
+    "c_rec_sim": 15.156983723308024,
+    "c_rec_cog": 7.371160883045075,
+    "c_rec_cog_pln": 0.17977527685898256,
+    "c_rec_cog_per": 0.16853932205529615,
+    "c_rec_cog_coord": 7.022846284130797,
+    "c_rec_phy": 19.640448996843844,
+    "c_rec_phy_plan": 0.0,
+    "c_rec_phy_sim": 0.0,
+    "c_rec_phy_gap": 19.640448996843844,
+    "c_rec_phy_redo": 0.0,
+    "c_rec_state_debt": 0.8764044746875399,
+    "c_rec_state_prog": 0.0,
+    "c_rec_state_goal": 0.0,
+    "c_rec_state_risk": 2.6292134240626197,
+    "c_rec_state_modulation": 1.034574468085106,
+    "c_rec_p90": 10.506358075551503,
+    "g_rec_total": 467.53294486839997,
+    "w_rem_star": 44.5,
+    "runtime_overhead_ratio": 0.0,
+    "num_recovery_windows": 1,
+    "raw_window_count": 1,
+    "formal_window_count": 1,
+    "skipped_window_count": 0,
+    "c_rec_valid": true,
+    "c_rec_missing_reason": "",
+    "baseline_match_level": "exact",
+    "stage_switches": 3,
+    "stages_spanned_mean": 3.0,
+    "num_template_events": 2,
+    "baseline_loaded": true,
+    "tracker_window_count": 1,
+    "tracker_window_open_final": false,
+    "template_distribution": {
+      "T3": 2
+    },
+    "stage_recovery_records": [
+      {
+        "stage_family": "placement_only",
+        "stage_index": 0,
+        "stage_modality": "planning",
+        "t_d": 3,
+        "t_r": 1130,
+        "duration": 1128,
+        "cog_swe": 328.0166666666667,
+        "cog_swe_pln": 8.0,
+        "cog_swe_per": 7.5,
+        "cog_swe_coord": 312.5166666666667,
+        "phy_swe": 874.0,
+        "phy_swe_plan": 0.0,
+        "phy_swe_sim": 0.0,
+        "phy_swe_gap": 874.0,
+        "phy_swe_redo": 0.0,
+        "state_debt_swe": 39.0,
+        "state_debt_prog": 0.0,
+        "state_debt_goal": 0.0,
+        "state_debt_risk": 117.0,
+        "omega_mean": 1.034574468085106,
+        "g_rec_sum_total": 467.53294486839997,
+        "g_rec_sum_plan": 157.55570469213802,
+        "g_rec_sum_sim": 586.9807244947473,
+        "W_rem_star": 44.5,
+        "W_rem_plan": 38.72674933569531,
+        "W_rem_sim": 38.72674933569531,
+        "W_rem_runtime": 0.0,
+        "runtime_overhead": 0.0,
+        "c_rec_plan": 4.06839467103222,
+        "c_rec_sim": 15.156983723308024,
+        "c_rec_cog": 7.371160883045075,
+        "c_rec_cog_pln": 0.17977527685898256,
+        "c_rec_cog_per": 0.16853932205529615,
+        "c_rec_cog_coord": 7.022846284130797,
+        "c_rec_phy": 19.640448996843844,
+        "c_rec_phy_plan": 0.0,
+        "c_rec_phy_sim": 0.0,
+        "c_rec_phy_gap": 19.640448996843844,
+        "c_rec_phy_redo": 0.0,
+        "c_rec_state_debt": 0.8764044746875399,
+        "c_rec_state_prog": 0.0,
+        "c_rec_state_goal": 0.0,
+        "c_rec_state_risk": 2.6292134240626197,
+        "c_rec": 10.506358075551503,
+        "runtime_overhead_ratio": 0.0,
+        "template_codes": [
+          "T3"
+        ],
+        "stages_spanned": [
+          0,
+          1,
+          -1
+        ],
+        "gap_steps": 874,
+        "redo_steps": 0,
+        "g_rec_sum": 467.53294486839997,
+        "W_rem_seg": 44.5,
+        "closed_by_stage_switch": false
+      }
+    ],
+    "recovery_window_evidence": [
+      {
+        "window_index": 0,
+        "valid": true,
+        "missing_reason": "",
+        "t_d": 3,
+        "t_r": 1130,
+        "t_end": 1130,
+        "trigger": "",
+        "template_codes": [
+          "T3"
+        ],
+        "severity": 3.5,
+        "anchor_t_d": {
+          "family": "placement_only",
+          "stage": 0,
+          "modality": "planning",
+          "progress": 0.0
+        },
+        "baseline_key": {
+          "family": "placement_only",
+          "stage": 0,
+          "modality": "planning"
+        },
+        "baseline_match_level": "exact",
+        "segment_count": 3,
+        "segments": [
+          {
+            "family": "placement_only",
+            "stage": 0,
+            "modality": "planning",
+            "start": 3,
+            "end": 937,
+            "q_start": 0.0,
+            "q_end": 0.0
+          },
+          {
+            "family": "placement_only",
+            "stage": 1,
+            "modality": "planning",
+            "start": 938,
+            "end": 1129,
+            "q_start": 0.0,
+            "q_end": 0.0
+          },
+          {
+            "family": "placement_only",
+            "stage": -1,
+            "modality": "planning",
+            "start": 1130,
+            "end": 1131,
+            "q_start": 0.0,
+            "q_end": 0.0
+          }
+        ],
+        "segment_fallbacks": [],
+        "features": {
+          "cognitive": {
+            "source": "online_tracker.cognitive_steps",
+            "raw": 328.0166666666667,
+            "normalized": 7.37116104868914
+          },
+          "physical": {
+            "source": "planner_info.step_deltas+action_trace",
+            "raw": 874.0,
+            "normalized": 19.640449438202246
+          },
+          "state_debt": {
+            "source": "progress/q/risk deltas",
+            "raw": 39.0,
+            "normalized": 0.8764044943820225
+          },
+          "g_rec_total": {
+            "source": "unified_cog_phy_state_density",
+            "raw": 467.53294486839997,
+            "normalized": 10.506358075551503
+          },
+          "W_rem_star": {
+            "source": "stage_baseline.W_rem_star_swe",
+            "raw": 44.5,
+            "normalized": 44.5
+          }
+        }
+      }
+    ],
+    "rebound_events": [
+      {
+        "kind": "t_d",
+        "step": 3,
+        "templates": [
+          "T3"
+        ],
+        "severity": 3.5,
+        "anchor": {
+          "family": "placement_only",
+          "stage": 0,
+          "modality": "planning",
+          "progress": 0.0
+        }
+      },
+      {
+        "kind": "t_r",
+        "step": 1130,
+        "templates": [
+          "T3"
+        ],
+        "severity": 3.5,
+        "anchor": {
+          "family": "placement_only",
+          "stage": -1,
+          "modality": "planning",
+          "progress": 1.0
+        }
+      }
+    ]
+  },
+  "summary": {
+    "b_epi": 0.0,
+    "mttr": 0.0,
+    "mtbf": 1131.0,
+    "recovery_ratio": 1.0,
+    "total_failures": 0
+  }
+}

@@ -1,0 +1,4 @@
+task_reflect_tool:
+  _target_: habitat_llm.tools.rebound.reflect_tool.TaskReflectTool
+  _recursive_: False
+  max_thought_chars: 2400

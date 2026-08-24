@@ -1,0 +1,2 @@
+rebound_n,rebound_c_rec_mean,rebound_c_rec_std,rebound_cliff_pct,stability_n,stability_beta_neigh_mean,stability_beta_out_mean,ge_n,ge_stress_levels,ge_task_families,ge_margin_available
+21,25.679246925143303,18.076701435321848,100.0,36,0.22112358688445125,0.31937444307235974,219,"[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]","['mixed_temporal', 'placement_only', 'spatial_relation']",True

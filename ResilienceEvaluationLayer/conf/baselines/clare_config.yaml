@@ -1,0 +1,165 @@
+# @package _global_
+#
+# CLARE (Continual Learning with Autonomous Routing and Expansion) Configuration
+# 
+# This configuration enables CLARE for lifelong learning capabilities.
+# Reference: CLARE Paper (arxiv.org/abs/2601.09512)
+#
+# Key Features:
+# - Context-based Adapters: Task knowledge stored as prompt templates
+# - TaskRouter: OOD detection via embedding similarity  
+# - ExpansionController: Automatic adapter creation for new tasks
+# - Offline Training: Batch-based evolution at epoch boundaries
+#
+# Usage: 
+#   python -m habitat_llm.examples.planner_demo_mp_new \
+#     --config-name baselines/clare_config.yaml \
+#     habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
+#     num_proc=1
+
+defaults:
+  - qwen3_centralized_zero_shot_react_summary_vllm
+  - _self_
+
+evaluation:
+  # === ADCA Analysis ===
+  adca:
+    enabled: true
+    llm_model: "gpt-4o"
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    adca_alpha: 1.0
+    adca_fix_base: 0.2
+    adca_orm_distribution: "last_step"
+
+  # === Context Evolution (enabled for CLARE integration) ===
+  context_evolve:
+    enabled: true
+    batch_size: 15
+    retry_ratio: 0.5
+    max_retries: 3
+    max_history: 3
+    max_context_chars: 2000
+
+  # === A2C Critic ===
+  critic:
+    enabled: true
+    
+    # Core RL parameters
+    gamma: 0.80
+    gae_lambda: 0.65
+    n_step: 5
+    
+    # Network architecture
+    text_dim: 384
+    numerical_dim: 32
+    encoder_hidden_dim: 256
+    state_dim: 128
+    value_hidden_dims: [256, 128, 64]
+    dropout_rate: 0.1
+    
+    # Optimization
+    value_lr: 0.001
+    
+    # LLM integration
+    use_llm_shaping: true
+    use_llm_offline: true
+    shaping_weight: 0.5
+    llm_call_frequency: 5
+    llm_model: "gpt-4o"
+    cache_size: 1000
+    
+    # Custom API Configuration
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    
+    # Analysis & Checkpoints
+    save_analyses: true
+    analysis_save_dir: "./analyses"
+    analyze_frequency: 1
+    save_checkpoints: false
+    checkpoint_frequency: 100
+    checkpoint_dir: "./checkpoints"
+    
+    # Device
+    device: "cuda"
+    
+    # Logging
+    log_statistics: true
+    debug: true
+    state_encoder_debug: true
+    state_encoder_debug_frequency: 1
+    state_encoder_debug_max_entries: 2000
+    save_shaping_logs: true
+
+  # === Safety Monitor ===
+  safety_monitor:
+    enabled: true
+    collision_penalty: 1.0
+    min_dist_threshold: 0.5
+    unsafe_state_penalty: 0.5
+
+  # === Planner Configuration ===
+  planner:
+    plan_config:
+      # Disable legacy task decomposition
+      use_task_decomposition: false
+      
+      # Disable CycleVLA (using CLARE instead)
+      use_cycle_vla: false
+      
+      # Disable CoPAL (using CLARE)
+      use_copal: false
+      
+      # ========================================
+      # CLARE: Continual Learning Configuration
+      # ========================================
+      clare:
+        # Master enable switch
+        enabled: true
+        
+        # Output directory for adapter storage
+        output_dir: "clare_adapters"
+        
+        # Maximum number of adapters to maintain
+        max_adapters: 20
+        
+        # --- Router Configuration ---
+        router:
+          # OOD threshold: tasks with similarity below this are considered new
+          ood_threshold: 0.5
+          
+          # Embedding model for task similarity (matches StateEncoder)
+          embedding_model: "all-MiniLM-L6-v2"
+        
+        # --- Expansion Controller ---
+        expansion:
+          # Minimum consecutive OOD detections to trigger expansion
+          min_ood_count: 3
+          
+          # Cooldown period after expansion (in steps)
+          cooldown_steps: 10
+          
+          # Confidence threshold for expansion consideration
+          expand_threshold: 0.3
+        
+        # --- Evolution Trainer (Offline) ---
+        evolution:
+          # Minimum episodes needed to train a new adapter
+          min_episodes_for_training: 3
+          
+          # Maximum patterns to store per adapter
+          max_patterns_per_adapter: 10
+      
+      # ========================================
+      # Rebound: Keep enabled for fault detection
+      # CLARE handles learning, Rebound handles system-level recovery
+      # ========================================
+      rebound:
+        enabled: true
+        max_retries: 3
+        startup_grace_period: 20
+        detectors:
+          context_overflow: true
+          graph_inconsistency: true
+          tool_failure_burst: true
+          progress_stagnation: true
+          immediate_error: false

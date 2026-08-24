@@ -1,0 +1,176 @@
+# @package _global_
+#
+# CoPAL (Corrective Planning) Configuration for Habitat-LLM
+# 
+# This configuration enables the CoPAL closed-loop correction mechanism.
+# Reference: CoPAL Paper (arxiv.org/abs/2310.07263)
+#
+# Key Features:
+# - Error Translation: Technical errors → Natural language
+# - History Management: Sliding window action-observation history
+# - Corrective Context: Structured prompts for re-planning
+#
+# Usage: 
+#   python -m habitat_llm.examples.planner_demo_mp_new \
+#     --config-name baselines/copal_config.yaml \
+#     habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
+#     num_proc=1
+
+defaults:
+  - qwen3_centralized_zero_shot_react_summary_vllm
+  - _self_
+
+evaluation:
+  # === ADCA Analysis (keep enabled for trajectory analysis) ===
+  adca:
+    enabled: true
+    llm_model: "gpt-4o"
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    adca_alpha: 1.0
+    adca_fix_base: 0.2
+    adca_orm_distribution: "last_step"
+
+  # === Context Evolution (disabled for CoPAL focus) ===
+  context_evolve:
+    enabled: false
+    batch_size: 15
+    retry_ratio: 0.5
+    max_retries: 3
+    max_history: 3
+    max_context_chars: 2000
+
+  # === A2C Critic (keep enabled for learning) ===
+  critic:
+    enabled: true
+    
+    # Core RL parameters
+    gamma: 0.80
+    gae_lambda: 0.65
+    n_step: 5
+    
+    # Network architecture
+    text_dim: 384
+    numerical_dim: 32
+    encoder_hidden_dim: 256
+    state_dim: 128
+    value_hidden_dims: [256, 128, 64]
+    dropout_rate: 0.1
+    
+    # Optimization
+    value_lr: 0.001
+    
+    # LLM integration
+    use_llm_shaping: true
+    use_llm_offline: true
+    shaping_weight: 0.5
+    llm_call_frequency: 5
+    llm_model: "gpt-4o"
+    cache_size: 1000
+    
+    # Custom API Configuration
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    
+    # Analysis & Checkpoints
+    save_analyses: true
+    analysis_save_dir: "./analyses"
+    analyze_frequency: 1
+    save_checkpoints: true
+    checkpoint_frequency: 10
+    checkpoint_dir: "./checkpoints"
+    
+    # Device
+    device: "cuda"
+    
+    # Logging
+    log_statistics: true
+    debug: true
+    state_encoder_debug: true
+    state_encoder_debug_frequency: 1
+    state_encoder_debug_max_entries: 2000
+    save_shaping_logs: true
+
+  # === Safety Monitor ===
+  safety_monitor:
+    enabled: true
+    collision_penalty: 1.0
+    min_dist_threshold: 0.5
+    unsafe_state_penalty: 0.5
+
+  # === Planner Configuration ===
+  planner:
+    plan_config:
+      # Disable legacy task decomposition
+      use_task_decomposition: false
+      
+      # Disable CycleVLA (using CoPAL instead)
+      use_cycle_vla: false
+      
+      # ========================================
+      # CoPAL: Corrective Planning Configuration
+      # ========================================
+      use_copal: true
+      
+      copal:
+        # --- Error Translation Settings ---
+        # Maximum characters for translated error message
+        max_error_chars: 150
+        
+        # Include recovery hints in error translation
+        include_recovery_hints: true
+        
+        # --- History Management Settings ---
+        # Maximum action steps to keep in history
+        max_history_steps: 10
+        
+        # Number of recent steps to include in context
+        context_history_steps: 3
+        
+        # Window size for failure pattern detection
+        failure_window: 5
+        
+        # --- Corrective Context Settings ---
+        # Maximum characters for CoPAL context injection
+        max_context_chars: 300
+        
+        # Use compact format for strict token limits
+        use_compact_format: false
+        
+        # Include action history in corrective context
+        include_history_in_context: true
+        
+        # --- Recovery Trigger Settings ---
+        # Trigger CoPAL on any failure
+        trigger_on_any_failure: true
+        
+        # Trigger after N consecutive failures of same type
+        consecutive_failure_threshold: 2
+        
+        # --- State Validation Settings ---
+        # Enable implicit failure detection
+        enable_state_validation: true
+        
+        # State drift threshold for proactive intervention
+        drift_threshold: 0.3
+        
+        # --- Metrics Settings ---
+        # Enable CoPAL recovery metrics (RSR, RTR, RSTC)
+        enable_metrics: true
+        
+        # Log CoPAL metrics to file
+        log_metrics: true
+      
+      # ========================================
+      # Rebound: Keep enabled for complementary recovery
+      # CoPAL handles context-based correction
+      # Rebound handles system-level fault detection
+      # ========================================
+      rebound:
+        enabled: true
+        max_retries: 3
+        startup_grace_period: 20
+        detectors:
+          context_overflow: true
+          graph_inconsistency: true
+          tool_failure_burst: true
+          progress_stagnation: true
+          immediate_error: false  # Handled by CoPAL instead

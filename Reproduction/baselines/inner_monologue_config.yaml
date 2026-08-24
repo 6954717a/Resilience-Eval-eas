@@ -1,0 +1,199 @@
+# @package _global_
+#
+# Inner Monologue Configuration for Habitat-LLM
+# 
+# This configuration enables the Inner Monologue closed-loop feedback mechanism.
+# Reference: Inner Monologue Paper (https://arxiv.org/abs/2207.05608)
+#
+# Key Features:
+# - Success/Failure detection from agent responses
+# - Scene description generation
+# - Self-state reporting
+# - Natural language feedback injection
+# - Forced Thought generation after feedback
+#
+# Usage: 
+#   python -m habitat_llm.examples.planner_demo_mp_new \
+#     --config-name baselines/inner_monologue_config.yaml \
+#     habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
+#     num_proc=1
+
+defaults:
+  - qwen3_centralized_zero_shot_react_summary_vllm
+  - _self_
+
+evaluation:
+  # === ADCA Analysis (keep enabled for trajectory analysis) ===
+  adca:
+    enabled: true
+    llm_model: "gpt-4o"
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    adca_alpha: 1.0
+    adca_fix_base: 0.2
+    adca_orm_distribution: "last_step"
+
+  # === Context Evolution (can coexist with Inner Monologue) ===
+  context_evolve:
+    enabled: false  # Disabled by default for Inner Monologue; enable if needed
+    batch_size: 15
+    retry_ratio: 0.5
+    max_retries: 3
+    max_history: 3
+    max_context_chars: 2000
+
+  # === A2C Critic (keep enabled for learning, optional for Inner Monologue) ===
+  critic:
+    enabled: true
+    
+    # Core RL parameters
+    gamma: 0.80
+    gae_lambda: 0.65
+    n_step: 5
+    
+    # Network architecture
+    text_dim: 384
+    numerical_dim: 32
+    encoder_hidden_dim: 256
+    state_dim: 128
+    value_hidden_dims: [256, 128, 64]
+    dropout_rate: 0.1
+    
+    # Optimization
+    value_lr: 0.001
+    
+    # LLM integration
+    use_llm_shaping: true
+    use_llm_offline: true
+    shaping_weight: 0.5
+    llm_call_frequency: 5
+    llm_model: "gpt-4o"
+    cache_size: 1000
+    
+    # Custom API Configuration
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    
+    # Analysis & Checkpoints
+    save_analyses: true
+    analysis_save_dir: "./analyses"
+    analyze_frequency: 1
+    save_checkpoints: true
+    checkpoint_frequency: 10
+    checkpoint_dir: "./checkpoints"
+    
+    # Device
+    device: "cuda"
+    
+    # Logging
+    log_statistics: true
+
+    # Debug (StateEncoder + RewardShaper)
+    debug: true
+    state_encoder_debug: true
+    state_encoder_debug_frequency: 1
+    state_encoder_debug_max_entries: 2000
+    state_encoder_debug_log_state: true
+    state_encoder_debug_log_next_state: false
+    save_shaping_logs: true
+    reward_shaper_json_mode: true
+    reward_shaper_log_frequency: 1
+    reward_shaper_log_max_entries: 20000
+    reward_shaper_log_cache_hits: false
+    state_encoder_debug_log_on_change: true
+    state_encoder_debug_change_threshold: 0.01
+    state_encoder_debug_signature_mode: semantic
+
+  # === Safety Monitor ===
+  safety_monitor:
+    enabled: true
+    collision_penalty: 1.0
+    min_dist_threshold: 0.5
+    unsafe_state_penalty: 0.5
+
+  # === Planner Configuration ===
+  planner:
+    plan_config:
+      # Disable legacy task decomposition (Inner Monologue doesn't require it)
+      use_task_decomposition: false
+      
+      # ========================================
+      # Inner Monologue: Closed-Loop Feedback
+      # ========================================
+      inner_monologue:
+        enabled: true
+        
+        # Feedback sources to enable
+        # Options: success_detection, scene_description, self_state
+        feedback_sources:
+          - success_detection
+          - scene_description
+          - self_state
+        
+        # Optional: Integrate with Critic for value-based feedback
+        use_critic_feedback: false
+        
+        # Optional: Integrate with Rebound for fault-based feedback
+        use_rebound_feedback: false
+        
+        # Force LLM to generate Thought after receiving feedback
+        force_thought_generation: true
+        
+        # Success Detector Configuration
+        success_detector:
+          # Whether to verify state changes (can be slow)
+          check_state_changes: false
+          # Whether to include detailed reasons in feedback
+          verbose_feedback: true
+        
+        # Scene Describer Configuration
+        scene_describer:
+          # Maximum length of scene description (characters)
+          max_length: 200
+          # Whether to include room information
+          include_rooms: true
+          # Whether to include furniture information
+          include_furniture: true
+          # Whether to focus on recent changes (not implemented yet)
+          focus_on_changes: false
+        
+        # Self State Reporter Configuration
+        self_state_reporter:
+          # Whether to include agent position
+          include_position: true
+          # Whether to include agent rotation/yaw
+          include_rotation: false
+          # Whether to include held objects
+          include_holdings: true
+          # Decimal places for position reporting
+          position_precision: 1
+        
+        # Critic Feedback Extractor Configuration (if use_critic_feedback: true)
+        critic_feedback_extractor:
+          # Whether to include value estimate
+          include_value_estimate: true
+          # Whether to include reward shaping results
+          include_reward_shaping: false
+          # Low value threshold for feedback
+          value_threshold_low: 0.3
+          # High value threshold for feedback
+          value_threshold_high: 0.7
+      
+      # ========================================
+      # CycleVLA: Disabled for Inner Monologue
+      # (Inner Monologue provides its own feedback mechanism)
+      # ========================================
+      use_cycle_vla: false
+      
+      # ========================================
+      # Rebound: Can coexist with Inner Monologue
+      # (Inner Monologue provides general feedback, Rebound provides fault recovery)
+      # ========================================
+      rebound:
+        enabled: false  # Disabled by default; enable if needed
+        max_retries: 3
+        startup_grace_period: 20
+        detectors:
+          context_overflow: false
+          graph_inconsistency: false
+          tool_failure_burst: false
+          progress_stagnation: false
+          immediate_error: false

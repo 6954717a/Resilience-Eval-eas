@@ -1,0 +1,68 @@
+# @package _global_
+
+defaults:
+  - qwen35_centralized_zero_shot_react_summary_vllm_with_rebound
+  - _self_
+
+evaluation:
+  log_critic_trajectory_export: true
+
+  metrics:
+    rebound:
+      enabled: true
+      gamma: 2.0
+    stability:
+      enabled: true
+      use_saycan_scores: false
+    degradation:
+      enabled: true
+
+  context_evolve:
+    enabled: false
+
+  adca:
+    enabled: false
+
+  critic:
+    inference_mode: "deterministic"
+    use_llm_shaping: true
+    use_llm_offline: true
+    analysis_export_enabled: true
+    analysis_save_dir: "./analyses"
+    analysis_export_include_world_state: false
+    analysis_export_include_task_context: true
+    analysis_export_world_state_mode: "none"
+    analysis_export_info_mode: "compact"
+    analysis_export_record_mode: "state_only"
+    analysis_export_minimal_schema: true
+    analysis_export_size_target: "compact-step-audit"
+    analysis_focus_mode: "replan_window"
+    analysis_replan_pre_sim_steps: 2
+    analysis_replan_post_sim_steps: 2
+    analysis_export_keep_first_last: true
+    analysis_export_keep_progress_transitions: true
+    analysis_export_keep_response_transitions: true
+    analysis_export_keep_success_transition: true
+    analysis_export_keep_td_error_topk: 4
+    analysis_export_max_selected_transitions: 96
+    analysis_export_info_action_history_keep_last: 1
+    analysis_export_include_reward_fields: false
+    analysis_export_include_text_embedding: false
+    analysis_export_include_text_desc: false
+    analysis_export_include_text_segments: false
+    analysis_export_include_category_presence: false
+    analysis_export_include_feature_schema_per_record: false
+    analysis_export_include_next_value_features: false
+    analysis_export_dir: "./analyses/critic_exports"
+    save_checkpoints: true
+    checkpoint_dir: "./checkpoints"
+    state_encoder:
+      text_encoder:
+        model: "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/model_cache/paraphrase-multilingual-MiniLM-L12-v2"
+        local_files_only: true
+        fallback: "hash"
+      variants:
+        input: "full"
+        context: "full"
+      debug:
+        dir: "./analyses/state_encoder"

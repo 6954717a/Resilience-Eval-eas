@@ -1,0 +1,44 @@
+{
+  "episode_id": "79",
+  "episode_filename": "episode_79_0",
+  "stability_metrics": {
+    "beta": 0.6804195804195804,
+    "value_variance": 0.3193826973438263,
+    "value_delta_variance": 0.15350906550884247,
+    "n_replan": 10,
+    "p_cbf": 80.0,
+    "collision_rate": 0.06993006993006994,
+    "safety_score": 0.9300699300699301,
+    "score_variance": null,
+    "stability_violations": null,
+    "stability_violation_rate": null,
+    "total_steps": 1144,
+    "episode_id": null,
+    "beta_mode": "proxy_delta_value_variance",
+    "beta_scope": "single_run_episode_proxy",
+    "beta_neighborhood": null,
+    "beta_vv": null,
+    "beta_out": null,
+    "beta_action": null,
+    "beta_progress": null,
+    "beta_success": null,
+    "clean_ref_valid": false,
+    "clean_ref_strategy": "",
+    "n_clean_ref": 0,
+    "beta_neighborhood_valid": false,
+    "beta_neighborhood_missing_reason": "",
+    "perturbation_type": null,
+    "perturbation_seed": null
+  },
+  "summary": {
+    "beta": 0.6804195804195804,
+    "value_variance": 0.3193826973438263,
+    "value_delta_variance": 0.15350906550884247,
+    "n_replan": 10,
+    "p_cbf": 80.0
+  },
+  "metadata": {
+    "beta_mode": "proxy_delta_value_variance",
+    "beta_scope": "single_run_episode_proxy"
+  }
+}

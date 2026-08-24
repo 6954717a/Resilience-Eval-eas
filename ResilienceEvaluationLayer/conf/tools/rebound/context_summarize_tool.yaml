@@ -1,0 +1,4 @@
+context_summarize_tool:
+  _target_: habitat_llm.tools.rebound.context_tool.ContextSummarizeTool
+  _recursive_: False
+

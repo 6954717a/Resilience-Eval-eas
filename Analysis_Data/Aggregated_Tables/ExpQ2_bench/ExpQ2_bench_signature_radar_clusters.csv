@@ -1,0 +1,11 @@
+method,shape_cluster,cluster_members
+Baseline,1,Baseline
+ReAct,2,ReAct;AgentEvolver
+InnerMono,3,InnerMono
+CoPAL,4,CoPAL;CLARE;CycleVLA
+AgentEvolver,2,ReAct;AgentEvolver
+CLARE,4,CoPAL;CLARE;CycleVLA
+SayCan,5,SayCan;Reflexion
+Reflexion,5,SayCan;Reflexion
+CycleVLA,4,CoPAL;CLARE;CycleVLA
+SMART-LLM,6,SMART-LLM

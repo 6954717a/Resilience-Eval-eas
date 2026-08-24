@@ -1,0 +1,27 @@
+# @package _global_
+
+defaults:
+  - centralized_zero_shot_react_summary
+  - override /planner@evaluation.planner: qwen_llm_centralized_motortoolsonly
+  - override /instruct@evaluation.planner.plan_config.instruct: zero_shot_centralized_new
+  - _self_
+
+# vllm overwrite
+evaluation:
+  planner:
+    plan_config:
+      llm:
+        inference_mode: vllm
+        host: 127.0.0.1
+        port: 8000
+        api_mode: auto
+        # Optional OpenAI-compatible root, e.g. http://127.0.0.1:8000/v1
+        # base_url: null
+        # Optional served model name when vLLM exposes a name different from
+        # generation_params.engine / local checkpoint path.
+        # served_model_name: "Qwen3-8B-Instruct"
+        generation_params:
+          engine: "Qwen3-8B-Instruct"
+          max_tokens: 2048
+          temperature: 0.3
+          stop: ['<|im_end|>', '\n\n\n']

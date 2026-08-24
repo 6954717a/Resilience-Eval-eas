@@ -1,0 +1,187 @@
+# @package _global_
+#
+# CycleVLA Configuration for Habitat-LLM
+# 
+# This configuration enables the CycleVLA proactive self-correction mechanism.
+# Reference: CycleVLA Paper (arxiv.org/abs/2601.02295)
+#
+# Key Features:
+# - Subtask decomposition via LLM
+# - Progress-aware execution with boundary detection  
+# - VLM-based failure prediction at subtask boundaries
+# - Cognitive backtracking (context-level rollback)
+# - MBR decoding for robust retry after backtracking
+#
+# Usage: 
+#   python -m habitat_llm.examples.planner_demo_mp \
+#     --config-name baselines/cyclevla_config.yaml \
+#     habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
+#     num_proc=1
+
+defaults:
+  - qwen3_centralized_zero_shot_react_summary_vllm
+  - _self_
+
+evaluation:
+  # === ADCA Analysis (keep enabled for trajectory analysis) ===
+  adca:
+    enabled: true
+    llm_model: "gpt-4o"
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    adca_alpha: 1.0
+    adca_fix_base: 0.2
+    adca_orm_distribution: "last_step"
+
+  # === Context Evolution (can coexist with CycleVLA) ===
+  context_evolve:
+    enabled: false  # Disabled by default for CycleVLA; enable if needed
+    batch_size: 15
+    retry_ratio: 0.5
+    max_retries: 3
+    max_history: 3
+    max_context_chars: 2000
+
+  # === A2C Critic (keep enabled for learning) ===
+  critic:
+    enabled: true
+    
+    # Core RL parameters
+    gamma: 0.80
+    gae_lambda: 0.65
+    n_step: 5
+    
+    # Network architecture
+    text_dim: 384
+    numerical_dim: 32
+    encoder_hidden_dim: 256
+    state_dim: 128
+    value_hidden_dims: [256, 128, 64]
+    dropout_rate: 0.1
+    
+    # Optimization
+    value_lr: 0.001
+    
+    # LLM integration
+    use_llm_shaping: true
+    use_llm_offline: true
+    shaping_weight: 0.5
+    llm_call_frequency: 5
+    llm_model: "gpt-4o"
+    cache_size: 1000
+    
+    # Custom API Configuration
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    
+    # Analysis & Checkpoints
+    save_analyses: true
+    analysis_save_dir: "./analyses"
+    analyze_frequency: 1
+    save_checkpoints: true
+    checkpoint_frequency: 10
+    checkpoint_dir: "./checkpoints"
+    
+    # Device
+    device: "cuda"
+    
+    # Logging
+    log_statistics: true
+
+    # Debug (StateEncoder + RewardShaper)
+    debug: true
+    state_encoder_debug: true
+    state_encoder_debug_frequency: 1
+    state_encoder_debug_max_entries: 2000
+    state_encoder_debug_log_state: true
+    state_encoder_debug_log_next_state: false
+    save_shaping_logs: true
+    reward_shaper_json_mode: true
+    reward_shaper_log_frequency: 1
+    reward_shaper_log_max_entries: 20000
+    reward_shaper_log_cache_hits: false
+    state_encoder_debug_log_on_change: true
+    state_encoder_debug_change_threshold: 0.01
+    state_encoder_debug_signature_mode: semantic
+
+  # === Safety Monitor ===
+  safety_monitor:
+    enabled: true
+    collision_penalty: 1.0
+    min_dist_threshold: 0.5
+    unsafe_state_penalty: 0.5
+
+  # === Planner Configuration ===
+  planner:
+    plan_config:
+      # Disable legacy task decomposition (CycleVLA handles this)
+      use_task_decomposition: false
+      
+      # ========================================
+      # CycleVLA: Proactive Self-Correction
+      # ========================================
+      use_cycle_vla: true
+      
+      cyclevla:
+        # --- Subtask Progress Detection ---
+        # Progress threshold for subtask boundary detection
+        # When progress >= threshold, VLM predictor is invoked
+        # Reference: τp in CycleVLA paper (default 0.9 in paper, 0.8 for earlier detection)
+        progress_threshold: 0.8
+        
+        # Maximum number of subtasks from decomposition
+        max_subtasks: 10
+        
+        # --- VLM Failure Predictor Configuration ---
+        # Model for VLM failure prediction (uses same API as critic)
+        vlm_model: "gpt-4o"
+        vlm_base_url: "https://api.huiyan-ai.cn/v1"
+        
+        # Minimum confidence threshold for backtrack decision
+        # "high" = only backtrack on high confidence predictions
+        # "medium" = backtrack on medium or high confidence
+        # "low" = always follow VLM decision
+        confidence_threshold: "medium"
+        
+        # Whether to include images in VLM prompt (requires multimodal model)
+        use_images: false
+        
+        # --- MBR (Minimum Bayes Risk) Decoding Configuration ---
+        # Number of action samples for MBR decoding after backtrack
+        # More samples = better consensus but slower
+        # Reference: N in CycleVLA paper, typically 5-10
+        mbr_num_samples: 5
+        
+        # Temperature for MBR sampling (higher = more diverse samples)
+        mbr_temperature: 0.7
+        
+        # Distance metric for MBR consensus selection
+        # "edit" = Levenshtein edit distance on action sequences
+        # "jaccard" = Jaccard distance on action sets
+        distance_metric: "edit"
+        
+        # --- Decomposition Model ---
+        # Model for initial task decomposition (can be same or different from main LLM)
+        decomposition_model: "gpt-4o"
+        decomposition_base_url: "https://api.huiyan-ai.cn/v1"
+      
+      # ========================================
+      # Inner Monologue: Disabled for CycleVLA
+      # (CycleVLA provides its own feedback mechanism)
+      # ========================================
+      inner_monologue:
+        enabled: false  # Disabled - CycleVLA handles feedback
+      
+      # ========================================
+      # Rebound: Keep disabled when using CycleVLA
+      # (CycleVLA provides its own recovery mechanism)
+      # ========================================
+      rebound:
+        enabled: false  # Disabled - CycleVLA handles recovery
+        max_retries: 3
+        startup_grace_period: 20
+        detectors:
+          context_overflow: false
+          graph_inconsistency: false
+          tool_failure_burst: false
+          progress_stagnation: false
+          immediate_error: false
+

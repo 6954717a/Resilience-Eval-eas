@@ -1,0 +1,17 @@
+{
+  "suite_name": "expq1",
+  "output_root": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge",
+  "subexperiments": [
+    {
+      "subexperiment_name": "ge_capacity_validity",
+      "directory": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity",
+      "raw_rollouts_csv": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/raw_rollouts.csv",
+      "summary_csv": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/summary.csv",
+      "capacity_summary_csv": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/capacity_summary.csv",
+      "margin_cells_summary_csv": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/margin_cells_summary.csv",
+      "metadata_json": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/experiment_metadata.json",
+      "row_count": 72
+    }
+  ],
+  "git_revision": "unknown"
+}

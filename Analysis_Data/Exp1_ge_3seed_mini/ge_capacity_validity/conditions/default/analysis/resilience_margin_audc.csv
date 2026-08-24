@@ -1,0 +1,3 @@
+evolve_step,ge_audc_f,ge_audc_norm_f,ge_boundary_lambda_star,ge_cliff_flag,ge_cpsc_lambda_star,ge_hard_lambda_star,ge_margin_drop_f,ge_max_degradation_rate,ge_monotonicity_violations,ge_valid_lambda_coverage,task_family
+0,1.016219807161631,1.016219807161631,1.0,1,1.0,1.0,-0.4703610199633659,1.8822837208319596,4,1.0,placement_only
+0,0.5367465518646957,0.5367465518646957,,1,,,0.11654454115533674,1.6289539690187431,3,1.0,spatial_relation

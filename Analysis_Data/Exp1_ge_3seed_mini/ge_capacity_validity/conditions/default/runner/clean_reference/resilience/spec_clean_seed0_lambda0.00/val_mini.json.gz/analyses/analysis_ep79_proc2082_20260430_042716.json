@@ -1,0 +1,25 @@
+{
+  "failure_points": [
+    84
+  ],
+  "root_causes": [
+    "Ineffective precondition checking for manipulation: the agent attempted Pick[stuffed_toy_4] while not close enough, indicating the controller did not verify spatial reachability before issuing the pick.",
+    "Inefficient navigation and object-handling strategy: the agent carried toy_food_2 while starting to work on the stuffed toy subtask, reflecting poor task sequencing and unnecessary object transport.",
+    "Subtask completion imbalance: only 2/5 propositions were completed and the toy fire truck and remaining toy food items were not finished, suggesting insufficient high-level planning or early termination before all goals were satisfied."
+  ],
+  "improvement_suggestions": [
+    "Add strict proximity and pose checks before issuing Pick actions (e.g., verify reachability, distance, and orientation relative to the target object) to avoid 'Not close enough' failures.",
+    "Improve navigation\u2013manipulation coordination so that the agent first navigates to a pose specifically optimized for picking the target object and only then attempts the pick.",
+    "Refine high-level task decomposition to avoid mixing subtasks while holding unrelated objects; complete one receptacle-related subtask (e.g., all toy food to the chosen chest) before starting on the stuffed toy.",
+    "Introduce progress-aware replanning that explicitly tracks which objects and propositions remain and prioritizes unfinished goals (e.g., moving the toy fire truck and all toy foods) before termination.",
+    "Optimize navigation paths and reduce redundant Navigate actions around the same targets by using better path planning and convergence criteria to stop once within a success region."
+  ],
+  "overall_assessment": "Execution partially progressed (2/5 goals) but suffered from at least one clear manipulation failure and inefficient sequencing, leaving major parts of the task incomplete. Overall behavior shows basic capability but weak robustness and task completion discipline.",
+  "execution_quality_score": 0.38,
+  "episode_number": 1,
+  "episode_id": "79",
+  "episode_filename": "episode_79_0",
+  "proc_id": "2082",
+  "timestamp": "2026-04-30T04:27:16.073337",
+  "task_instruction": "Move the toy fire truck to the chest of drawers. Put the toy food items in a new chest of drawers. Place the stuffed toy on the bed."
+}

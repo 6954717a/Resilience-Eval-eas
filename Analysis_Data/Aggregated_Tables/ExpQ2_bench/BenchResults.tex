@@ -1,0 +1,31 @@
+\begin{table*}[t]
+    \centering
+    \footnotesize
+    \caption{Comparative EAS resilience benchmark.} 
+    \label{tab:main_benchmark}
+    \renewcommand{\arraystretch}{1.1} 
+    \setlength{\tabcolsep}{5pt}
+    \begin{tabular}{l | c c c | c c | c }
+    \toprule
+    \multirow{2}{*}{\textbf{Method}} 
+    & \multicolumn{3}{c|}{\textbf{Resilience Metrics}} 
+    & \multicolumn{2}{c|}{\textbf{Outcome Ref.}}
+    & \textbf{Sim.} \\
+    & $C_{\mathrm{rec}}$ ($\downarrow$) & $\beta$ ($\downarrow$) & Stress Cap. $\lambda^*$ ($\uparrow$) 
+    & \textbf{SR} & \textbf{Comp.} 
+    & \textbf{Steps} \\
+    \midrule
+    \textbf{ReAct}       & 6.5 $\pm$ 0.46  & 0.239 $\pm$ 0.011 & 0.50 $\pm$ 0.042 & 38.5\% $\pm$ 3.1\% & 57.8\% $\pm$ 4.6\% & 3374 $\pm$ 285 \\
+    \textbf{Reflexion}   & 57.3 $\pm$ 5.07 & 0.299 $\pm$ 0.021 & 0.66 $\pm$ 0.035 & 56.3\% $\pm$ 4.2\% & 75.0\% $\pm$ 3.8\% & 4390 $\pm$ 312 \\
+    \textbf{CycleVLA}    & 35.5 $\pm$ 2.91 & 0.400 $\pm$ 0.026 & 0.72 $\pm$ 0.047 & 22.2\% $\pm$ 2.8\% & 47.5\% $\pm$ 4.1\% & 4688 $\pm$ 420 \\
+    \textbf{CLARE}       & 21.6 $\pm$ 1.68 & 0.344 $\pm$ 0.016 & 0.72 $\pm$ 0.052 & 28.4\% $\pm$ 3.5\% & 46.0\% $\pm$ 4.5\% & 4249 $\pm$ 360 \\
+    \textbf{SayCan}      & 38.5 $\pm$ 2.49 & 0.283 $\pm$ 0.013 & 0.72 $\pm$ 0.046 & 57.0\% $\pm$ 4.1\% & 72.6\% $\pm$ 3.7\% & 4682 $\pm$ 380 \\
+    \textbf{AgentEvolver}& 19.2 $\pm$ 1.24 & 0.264 $\pm$ 0.012 & 0.21 $\pm$ 0.015 & 48.8\% $\pm$ 3.9\% & 66.8\% $\pm$ 4.2\% & 3084 $\pm$ 250 \\
+    \textbf{InnerMono}   & 43.5 $\pm$ 2.69 & 0.149 $\pm$ 0.007 & 0.53 $\pm$ 0.026 & 49.5\% $\pm$ 4.0\% & 67.5\% $\pm$ 4.3\% & 3670 $\pm$ 290 \\
+    \textbf{CoPAL}       & 11.9 $\pm$ 1.02 & 0.302 $\pm$ 0.017 & 0.85 $\pm$ 0.078 & 55.8\% $\pm$ 4.5\% & 72.6\% $\pm$ 3.9\% & 4846 $\pm$ 410 \\
+    \textbf{SMART-LLM}   & 28.2 $\pm$ 2.20 & 0.339 $\pm$ 0.018 & 0.40 $\pm$ 0.036 & 55.7\% $\pm$ 3.8\% & 74.3\% $\pm$ 4.1\% & 5085 $\pm$ 395 \\
+    \textbf{Baseline}    & 25.0 $\pm$ 2.03 & 0.200 $\pm$ 0.009 & 0.79 $\pm$ 0.042 & 53.0\% $\pm$ 3.6\% & 69.7\% $\pm$ 3.5\% & 3671 $\pm$ 275 \\
+    \bottomrule
+    \end{tabular}
+    \vspace{-0.2cm}
+\end{table*}

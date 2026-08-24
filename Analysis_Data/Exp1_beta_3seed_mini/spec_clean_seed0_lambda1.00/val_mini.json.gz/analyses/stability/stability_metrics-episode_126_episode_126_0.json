@@ -1,0 +1,53 @@
+{
+  "episode_id": "126",
+  "episode_filename": "episode_126_0",
+  "stability_metrics": {
+    "beta": 0.4970754741022944,
+    "value_variance": 0.020453114062547684,
+    "value_delta_variance": 0.024921517819166183,
+    "n_replan": 22,
+    "p_cbf": 0.0,
+    "collision_rate": 0.0,
+    "safety_score": 1.0,
+    "score_variance": null,
+    "stability_violations": null,
+    "stability_violation_rate": null,
+    "total_steps": 1168,
+    "episode_id": null,
+    "beta_mode": "proxy_delta_value_variance",
+    "beta_scope": "single_run_episode_proxy",
+    "beta_neighborhood": null,
+    "beta_vv": null,
+    "beta_out": null,
+    "beta_action": null,
+    "beta_progress": null,
+    "beta_success": null,
+    "clean_ref_valid": false,
+    "clean_ref_strategy": "",
+    "n_clean_ref": 0,
+    "beta_neighborhood_valid": false,
+    "beta_neighborhood_missing_reason": "",
+    "perturbation_type": null,
+    "perturbation_seed": null,
+    "td_error_mean_abs": 0.274559885263443,
+    "td_error_p95_abs": 0.45970816612243653,
+    "gae_mean_abs": 0.5558695197105408,
+    "gae_p95_abs": 0.9656204372644427,
+    "return_target_variance": 0.12550288438796997,
+    "oscillation_loss": 0.6446267366409302,
+    "oscillation_loss_valid": true,
+    "oscillation_source": "critic_value_td_gae",
+    "critic_trace_len": 1162
+  },
+  "summary": {
+    "beta": 0.4970754741022944,
+    "value_variance": 0.020453114062547684,
+    "value_delta_variance": 0.024921517819166183,
+    "n_replan": 22,
+    "p_cbf": 0.0
+  },
+  "metadata": {
+    "beta_mode": "proxy_delta_value_variance",
+    "beta_scope": "single_run_episode_proxy"
+  }
+}

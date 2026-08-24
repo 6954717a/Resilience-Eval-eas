@@ -1,0 +1,55 @@
+# Local credentials and private configuration
+.env
+.env.*
+!.env.example
+**/planner/api_key.txt
+**/planner/api_key_*.txt
+**/planner/api-key.txt
+**/planner/api-key_*.txt
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+*.pyc.*
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments and package outputs
+.venv/
+venv/
+env.bak/
+venv.bak/
+build/
+dist/
+*.egg-info/
+
+# Experiment/runtime outputs that should be regenerated
+outputs/
+multirun/
+wandb/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+
+# Editor, OS, and temporary files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tmp
+*.temp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

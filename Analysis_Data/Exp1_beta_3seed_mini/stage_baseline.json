@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "stages": [
+    {
+      "family": "spatial_relation",
+      "stage": 0,
+      "modality": "planning",
+      "tau_star": 1.0,
+      "T_bar": {
+        "pln": 0.0,
+        "per": 0.0,
+        "coord": 0.0,
+        "nav": 0.0,
+        "man": 0.0,
+        "redo": 0.0
+      },
+      "delta_p_bar": 1.0,
+      "delta_q_bar": 1.0,
+      "r_bar": 0.0,
+      "W_rem_seg_bar": 22.0,
+      "W_rem_star_swe": 32.5,
+      "by_dim": {
+        "plan": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 22.0
+        },
+        "sim": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 22.0
+        },
+        "runtime": {
+          "tau_bar": 0.0,
+          "W_rem_seg_bar": 0.0
+        }
+      },
+      "v_bar_channels": {
+        "pln": 0.0,
+        "per": 0.0,
+        "coord": 0.0
+      },
+      "n_samples": 128
+    },
+    {
+      "family": "spatial_relation",
+      "stage": 1,
+      "modality": "planning",
+      "tau_star": 1.0,
+      "T_bar": {
+        "pln": 0.0,
+        "per": 0.0,
+        "coord": 0.0,
+        "nav": 0.0,
+        "man": 0.0,
+        "redo": 0.0
+      },
+      "delta_p_bar": 0.3333333333333333,
+      "delta_q_bar": 0.3333333333333333,
+      "r_bar": 0.0,
+      "W_rem_seg_bar": 22.0,
+      "W_rem_star_swe": 24.0,
+      "by_dim": {
+        "plan": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 22.0
+        },
+        "sim": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 22.0
+        },
+        "runtime": {
+          "tau_bar": 0.0,
+          "W_rem_seg_bar": 0.0
+        }
+      },
+      "v_bar_channels": {
+        "pln": 0.0,
+        "per": 0.0,
+        "coord": 0.0
+      },
+      "n_samples": 43
+    },
+    {
+      "family": "spatial_relation",
+      "stage": -1,
+      "modality": "planning",
+      "tau_star": 1.0,
+      "T_bar": {
+        "pln": 0.05,
+        "per": 0.05,
+        "coord": 0.0,
+        "nav": 0.0,
+        "man": 0.0,
+        "redo": 0.0
+      },
+      "delta_p_bar": 0.6666666666666667,
+      "delta_q_bar": 0.6666666666666667,
+      "r_bar": 0.0,
+      "W_rem_seg_bar": 1.5,
+      "W_rem_star_swe": 1.5,
+      "by_dim": {
+        "plan": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 1.5
+        },
+        "sim": {
+          "tau_bar": 1.0,
+          "W_rem_seg_bar": 1.5
+        },
+        "runtime": {
+          "tau_bar": 0.0,
+          "W_rem_seg_bar": 0.0
+        }
+      },
+      "v_bar_channels": {
+        "pln": 0.5,
+        "per": 0.5,
+        "coord": 0.0
+      },
+      "n_samples": 2
+    }
+  ],
+  "metadata": {
+    "baseline_kind": "hash_run_local",
+    "signature": {
+      "dataset_path": "data/datasets/partnr_episodes/v0_0/val_mini.json.gz",
+      "episode_ids": [
+        "126"
+      ],
+      "clean_specs": [
+        "clean@seed=0@lambda=1.00",
+        "clean@seed=1@lambda=1.00",
+        "clean@seed=2@lambda=1.00"
+      ],
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "intensities": [
+        1.0
+      ],
+      "baseline_json": "stage_baseline.json",
+      "output_subdir": "resilience",
+      "signature": "1d70adfd0dc6",
+      "archive_filename": "stage_baseline__val_mini.json__eps-126__s-0_1_2__1d70adfd0dc6.json"
+    },
+    "estimator_stats": {
+      "total_records": 176,
+      "export_file_count": 3,
+      "episode_export_counts": {
+        "126": 3
+      },
+      "episode_record_counts": {
+        "126": 176
+      }
+    }
+  }
+}

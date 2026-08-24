@@ -1,0 +1,12 @@
+# @package _global_
+
+defaults:
+  - centralized_zero_shot_react_summary
+  - override /planner@evaluation.planner: qwen_llm_centralized_motortoolsonly
+  - _self_
+
+evaluation:
+  planner:
+    plan_config:
+      llm:
+        inference_mode: "hf"

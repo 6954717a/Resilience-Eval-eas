@@ -1,0 +1,13 @@
+[
+  {
+    "family_a": "placement_only",
+    "family_b": "spatial_relation",
+    "ks_stat": 0.7777777777777778,
+    "ks_pvalue": 0.0909090909090909,
+    "mw_stat": 4.0,
+    "mw_pvalue": 0.09551092377890248,
+    "n_a": 9,
+    "n_b": 3,
+    "metric_key": "beta_hat"
+  }
+]

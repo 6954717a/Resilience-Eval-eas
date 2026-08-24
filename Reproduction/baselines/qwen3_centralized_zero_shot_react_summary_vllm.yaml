@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - centralized_zero_shot_react_summary
+  - override /planner@evaluation.planner: qwen_llm_centralized_motortoolsonly
+  - override /instruct@evaluation.planner.plan_config.instruct: zero_shot_centralized
+  - _self_
+
+# vllm overwrite
+evaluation:
+  planner:
+    plan_config:
+      llm:
+        inference_mode: vllm
+        host: 127.0.0.1
+        port: 8000
+        generation_params:
+          engine: "Qwen3-8B-Instruct"
+          max_tokens: 2048  # 增加生成长度，防止长文本被截断导致格式错误
+          temperature: 0.0  # 使用贪心解码，提高稳定性
+          stop: ['<|im_end|>', '\n\n\n']  # 停止标记
+

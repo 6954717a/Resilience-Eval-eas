@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+  - centralized_zero_shot_react_summary
+  - override /planner@evaluation.planner: qwen_llm_centralized_motortoolsonly
+  - override /instruct@evaluation.planner.plan_config.instruct: zero_shot_centralized
+  - _self_
+
+# vllm overwrite
+evaluation:
+  planner:
+    plan_config:
+      llm:
+        inference_mode: vllm
+        host: localhost
+        port: 8000
+        generation_params:
+          engine: "Qwen2.5-7B-Instruct"
+

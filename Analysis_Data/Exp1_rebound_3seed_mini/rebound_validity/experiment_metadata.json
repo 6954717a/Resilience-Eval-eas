@@ -1,0 +1,421 @@
+{
+  "suite_name": "expq1",
+  "subexperiment_name": "rebound_validity",
+  "argument": "Validate that binary success can hide recovery cost, especially cognitive recovery cost under perturbation.",
+  "headline_metric": "rebound_c_rec",
+  "support_metrics": [
+    "rebound_c_rec_cog",
+    "rebound_c_rec_phy",
+    "rebound_c_rec_state_debt",
+    "rebound_num_recovery_windows",
+    "rebound_raw_window_count",
+    "rebound_formal_window_count",
+    "rebound_skipped_window_count",
+    "rebound_c_rec_valid"
+  ],
+  "baseline_model": "baselines/qwen3_centralized_zero_shot_react_summary_vllm_state",
+  "optimized_model": null,
+  "dataset_path": "data/datasets/partnr_episodes/v0_0/val_mini.json.gz",
+  "episode_ids": [
+    78,
+    127,
+    126,
+    11,
+    79,
+    80,
+    81
+  ],
+  "postprocess": [
+    "stability"
+  ],
+  "summary_group_keys": [
+    "condition_name",
+    "perturbation_type",
+    "perturbation_intensity"
+  ],
+  "summary_metrics": [
+    "task_percent_complete",
+    "task_state_success",
+    "proposition_satisfied_fraction",
+    "rebound_c_rec",
+    "rebound_c_rec_cog",
+    "rebound_c_rec_phy",
+    "rebound_c_rec_state_debt",
+    "rebound_c_rec_plan",
+    "rebound_c_rec_sim",
+    "rebound_num_recovery_windows",
+    "rebound_raw_window_count",
+    "rebound_formal_window_count",
+    "rebound_skipped_window_count",
+    "rebound_c_rec_valid",
+    "rebound_w_rem_star",
+    "rebound_g_rec_total",
+    "stability_beta",
+    "stability_beta_neighborhood",
+    "stability_beta_vv",
+    "stability_beta_out",
+    "stability_beta_action",
+    "stability_beta_progress",
+    "stability_beta_success",
+    "stability_beta_neighborhood_valid",
+    "stability_p_cbf",
+    "stability_value_delta_variance",
+    "ge_contract_margin_min",
+    "ge_margin_soft",
+    "ge_cpsc_lambda_star",
+    "ge_audc_f",
+    "ge_cell_valid",
+    "ge_valid_lambda_coverage",
+    "ge_degradation_rate",
+    "ge_max_degradation_rate",
+    "ge_cliff_flag",
+    "ge_hard_boundary_hit"
+  ],
+  "row_count": 21,
+  "condition_runs": [
+    {
+      "condition_name": "default",
+      "condition_label": "default",
+      "row_count": 21,
+      "phase_runs": [
+        {
+          "phase_label": "main",
+          "results_dir": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-27_09-53-39-val_mini.json/results/expq1/rebound_validity/conditions/default/runner/main",
+          "raw_output": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-27_09-53-39-val_mini.json/results/expq1/rebound_validity/conditions/default/runner/main/resilience/resilience_rebound.csv",
+          "baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-78_127_126_11_79_80-etc__s-0__f7ef3cd88ec2.json",
+          "executed_specs": [
+            {
+              "kind": "clean",
+              "seed": 0,
+              "intensity": 1.0,
+              "extras": {}
+            },
+            {
+              "kind": "surface_rewrite",
+              "seed": 0,
+              "intensity": 1.0,
+              "extras": {}
+            },
+            {
+              "kind": "object_state_toggle",
+              "seed": 0,
+              "intensity": 1.0,
+              "extras": {}
+            }
+          ],
+          "row_count": 21
+        }
+      ],
+      "baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-78_127_126_11_79_80-etc__s-0__f7ef3cd88ec2.json",
+      "analysis_dir": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-27_09-53-39-val_mini.json/results/expq1/rebound_validity/conditions/default/analysis",
+      "condition_raw_rollouts_csv": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-27_09-53-39-val_mini.json/results/expq1/rebound_validity/conditions/default/analysis/raw_rollouts.csv",
+      "postprocess": [
+        "stability"
+      ],
+      "ge_outputs": {}
+    }
+  ],
+  "config_name": "experiments/expq1.yaml",
+  "git_revision": "unknown",
+  "suite_config": {
+    "output_subdir": "expq1",
+    "baseline_model": "baselines/qwen3_centralized_zero_shot_react_summary_vllm_state",
+    "optimized_model": null,
+    "shared": {
+      "working_set": [
+        78,
+        127,
+        126,
+        11,
+        79,
+        80,
+        81,
+        129,
+        125,
+        1,
+        9,
+        60,
+        73,
+        168,
+        237
+      ],
+      "base_patch": {
+        "resilience": {
+          "stage_baseline": {
+            "episode_aggregate": {
+              "enabled": true,
+              "fallback_when_hash_missing": true,
+              "merge_existing": true
+            }
+          }
+        }
+      }
+    },
+    "subexperiments": {
+      "rebound_validity": {
+        "enabled": true,
+        "argument": "Validate that binary success can hide recovery cost, especially cognitive recovery cost under perturbation.",
+        "headline_metric": "rebound_c_rec",
+        "support_metrics": [
+          "rebound_c_rec_cog",
+          "rebound_c_rec_phy",
+          "rebound_c_rec_state_debt",
+          "rebound_num_recovery_windows",
+          "rebound_raw_window_count",
+          "rebound_formal_window_count",
+          "rebound_skipped_window_count",
+          "rebound_c_rec_valid"
+        ],
+        "episode_ids": [
+          78,
+          127,
+          126,
+          11,
+          79,
+          80,
+          81
+        ],
+        "postprocess": [
+          "stability"
+        ],
+        "summary_group_keys": [
+          "condition_name",
+          "perturbation_type",
+          "perturbation_intensity"
+        ],
+        "phases": [
+          {
+            "label": "main",
+            "patch": {
+              "resilience": {
+                "mode": "rebound",
+                "perturbations": [
+                  "clean",
+                  "surface_rewrite",
+                  "object_state_toggle"
+                ],
+                "seeds": [
+                  0
+                ],
+                "intensities": [
+                  1.0
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "stability_validity": {
+        "enabled": true,
+        "argument": "Validate that neighborhood stability captures semantic/action consistency under perturbation, not only success-rate changes.",
+        "headline_metric": "stability_beta_neighborhood",
+        "support_metrics": [
+          "stability_beta_vv",
+          "stability_beta_out",
+          "stability_beta_action",
+          "stability_beta_progress",
+          "stability_beta_success",
+          "stability_beta_neighborhood_valid",
+          "stability_beta"
+        ],
+        "episode_ids": [
+          126,
+          127,
+          78,
+          129,
+          125,
+          1,
+          9,
+          60
+        ],
+        "postprocess": [
+          "stability"
+        ],
+        "summary_group_keys": [
+          "condition_name",
+          "perturbation_type",
+          "perturbation_intensity"
+        ],
+        "phases": [
+          {
+            "label": "main",
+            "patch": {
+              "resilience": {
+                "mode": "stability",
+                "perturbations": [
+                  "clean",
+                  "surface_rewrite",
+                  "filler_injection"
+                ],
+                "seeds": [
+                  0
+                ],
+                "intensities": [
+                  1.0
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "ge_validity": {
+        "enabled": true,
+        "argument": "Validate GE as a stress-response capacity metric: h_i(lambda) -> r_f(lambda) -> M_f(lambda) -> lambda_f^*, D_f(lambda), rather than a restatement of binary success.",
+        "headline_metric": "ge_cpsc_lambda_star",
+        "support_metrics": [
+          "ge_margin_soft",
+          "ge_audc_f",
+          "ge_degradation_rate",
+          "ge_max_degradation_rate",
+          "ge_hard_boundary_hit",
+          "ge_valid_lambda_coverage",
+          "task_state_success_rate"
+        ],
+        "episode_ids": [
+          78,
+          127,
+          126,
+          11,
+          79,
+          80,
+          81,
+          129,
+          125,
+          1,
+          9,
+          60,
+          73,
+          168,
+          237
+        ],
+        "postprocess": [
+          "stability",
+          "margin"
+        ],
+        "summary_group_keys": [
+          "condition_name",
+          "task_family",
+          "stress_lambda"
+        ],
+        "phases": [
+          {
+            "label": "clean_reference",
+            "patch": {
+              "resilience": {
+                "mode": "margin",
+                "perturbations": [
+                  "clean"
+                ],
+                "seeds": [
+                  0
+                ],
+                "intensities": [
+                  0.0
+                ],
+                "contract_margin": {
+                  "stress_lambdas": [
+                    0.0,
+                    0.2,
+                    0.4,
+                    0.6,
+                    0.8,
+                    1.0
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "label": "stress_sweep",
+            "patch": {
+              "resilience": {
+                "mode": "margin",
+                "perturbations": [
+                  "irrelevant_perturbation"
+                ],
+                "seeds": [
+                  0
+                ],
+                "intensities": [
+                  0.0,
+                  0.2,
+                  0.4,
+                  0.6,
+                  0.8,
+                  1.0
+                ],
+                "contract_margin": {
+                  "stress_lambdas": [
+                    0.0,
+                    0.2,
+                    0.4,
+                    0.6,
+                    0.8,
+                    1.0
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "block_config": {
+    "enabled": true,
+    "argument": "Validate that binary success can hide recovery cost, especially cognitive recovery cost under perturbation.",
+    "headline_metric": "rebound_c_rec",
+    "support_metrics": [
+      "rebound_c_rec_cog",
+      "rebound_c_rec_phy",
+      "rebound_c_rec_state_debt",
+      "rebound_num_recovery_windows",
+      "rebound_raw_window_count",
+      "rebound_formal_window_count",
+      "rebound_skipped_window_count",
+      "rebound_c_rec_valid"
+    ],
+    "episode_ids": [
+      78,
+      127,
+      126,
+      11,
+      79,
+      80,
+      81
+    ],
+    "postprocess": [
+      "stability"
+    ],
+    "summary_group_keys": [
+      "condition_name",
+      "perturbation_type",
+      "perturbation_intensity"
+    ],
+    "phases": [
+      {
+        "label": "main",
+        "patch": {
+          "resilience": {
+            "mode": "rebound",
+            "perturbations": [
+              "clean",
+              "surface_rewrite",
+              "object_state_toggle"
+            ],
+            "seeds": [
+              0
+            ],
+            "intensities": [
+              1.0
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "raw_rollouts_csv": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-27_09-53-39-val_mini.json/results/expq1/rebound_validity/raw_rollouts.csv",
+    "summary_csv": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-27_09-53-39-val_mini.json/results/expq1/rebound_validity/summary.csv"
+  }
+}

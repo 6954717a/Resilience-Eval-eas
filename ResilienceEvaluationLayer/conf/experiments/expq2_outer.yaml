@@ -1,0 +1,60 @@
+# @package _global_
+
+defaults:
+  - /baselines/qwen3_centralized_zero_shot_react_summary_vllm_state
+  - /evaluation/resilience_config
+  - _self_
+
+expq2_outer:
+  output_subdir: "expq2_outer"
+  baseline_model: "baselines/qwen3_centralized_zero_shot_react_summary_vllm_state"
+  optimized_model: null
+  shared:
+    working_set: [78, 127, 126, 11, 79, 80, 81, 128, 129, 125, 1, 9, 60, 73, 168, 237]
+  subexperiments:
+    outer_stress_curve:
+      enabled: true
+      argument: "外部压力逐步增大时，系统是平滑退化还是突然崩溃；GE 是主指标，Rebound/Stability 作为解释证据。"
+      headline_metric: "ge_contract_margin_min"
+      support_metrics:
+        - "ge_audc_f"
+        - "rebound_c_rec"
+        - "stability_beta_neighborhood"
+      episode_ids: [78, 127, 126, 11, 79, 80, 81, 128, 129, 125, 1, 9, 60, 73, 168, 237]
+      postprocess: ["stability", "margin"]
+      summary_group_keys: ["condition_name", "stress_lambda"]
+      conditions:
+        - name: "irrelevant_perturbation"
+          label: "irrelevant_perturbation"
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "margin"
+                  perturbations: ["clean"]
+                  seeds: [0, 1, 2]
+                  intensities: [1.0]
+            - label: "stress_sweep"
+              patch:
+                resilience:
+                  mode: "margin"
+                  perturbations: ["irrelevant_perturbation"]
+                  seeds: [0, 1, 2]
+                  intensities: [0.0, 0.2, 0.5, 0.8, 1.0]
+        - name: "filler_injection"
+          label: "filler_injection_sensitivity"
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "margin"
+                  perturbations: ["clean"]
+                  seeds: [0, 1, 2]
+                  intensities: [1.0]
+            - label: "stress_sweep"
+              patch:
+                resilience:
+                  mode: "margin"
+                  perturbations: ["filler_injection"]
+                  seeds: [0, 1, 2]
+                  intensities: [0.0, 0.2, 0.5, 0.8, 1.0]

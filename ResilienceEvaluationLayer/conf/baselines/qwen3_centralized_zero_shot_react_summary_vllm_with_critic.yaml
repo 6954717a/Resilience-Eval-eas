@@ -1,0 +1,64 @@
+# @package _global_
+
+defaults:
+  - qwen3_centralized_zero_shot_react_summary_vllm
+  - _self_
+
+evaluation:
+  adca:
+    enabled: false # 先关了, 有点贵...
+    llm_model: "kimi-k2-0905-preview"
+    llm_base_url: "https://api.moonshot.cn/v1"
+    adca_alpha: 1.0
+    adca_fix_base: 0.2
+    adca_orm_distribution: "last_step"
+
+  critic:
+    enabled: true
+    
+    # Core RL parameters
+    gamma: 0.99
+    gae_lambda: 0.95
+    n_step: 5
+    
+    # Network architecture
+    text_dim: 384
+    numerical_dim: 32
+    encoder_hidden_dim: 256
+    state_dim: 128
+    value_hidden_dims: [256, 128, 64]
+    dropout_rate: 0.1
+    
+    # Optimization
+    value_lr: 0.001
+    
+    # LLM integration
+    use_llm_shaping: true
+    use_llm_offline: true
+    shaping_weight: 0.5 # LLM评估的Reward影响
+    llm_call_frequency: 5
+    llm_model: "kimi-k2-0905-preview" # Check available models
+    cache_size: 2000
+    
+    # Custom API Configuration
+    # llm_base_url: "https://api.huiyan-ai.cn/v1"
+    llm_base_url: "https://api.moonshot.cn/v1"
+    # llm_api_key: "your-key-here" # Optional: set here or use OPENAI_API_KEY env var
+    
+    # Analysis & Checkpoints
+    save_analyses: true
+    analysis_save_dir: "./analyses"
+    analyze_frequency: 1
+    save_checkpoints: true
+    checkpoint_frequency: 10
+    checkpoint_dir: "./checkpoints"
+    
+    # Device
+    device: "cuda"
+    
+    # Logging
+    log_statistics: true
+
+  planner:
+    plan_config:
+      use_task_decomposition: false

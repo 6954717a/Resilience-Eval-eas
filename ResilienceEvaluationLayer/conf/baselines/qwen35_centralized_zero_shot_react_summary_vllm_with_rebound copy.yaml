@@ -1,0 +1,140 @@
+# @package _global_
+
+defaults:
+  - qwen35_centralized_zero_shot_react_summary_vllm
+  - _self_
+
+evaluation:
+  adca:
+    enabled: true
+    # llm_model: "kimi-k2-0905-preview"
+    # llm_base_url: "https://api.moonshot.cn/v1"
+    llm_model: "gpt-5.1"
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    adca_alpha: 1.0
+    adca_fix_base: 0.2
+    adca_orm_distribution: "last_step"
+
+  context_evolve:
+    enabled: false
+    batch_size: 15
+    retry_ratio: 0.5
+    max_retries: 3
+    max_history: 3
+    max_context_chars: 2000
+
+  critic:
+    enabled: true
+    
+    # Core RL parameters
+    gamma: 0.80
+    gae_lambda: 0.65
+    n_step: 5
+    
+    # Network architecture
+    value_hidden_dims: [256, 128, 64]
+    dropout_rate: 0.1
+
+    state_encoder:
+      dims:
+        text: 384
+        numerical: 32
+        hidden: 256
+        output: 128
+      variants:
+        input: "full"
+        context: "full"
+      normalization:
+        distance: 10.0
+        count: 10.0
+        action_history_cap: 50
+      fusion:
+        dropout_rate: 0.1
+      debug:
+        enabled: true
+        dir: "./analyses/state_encoder"
+        frequency: 1
+        max_entries: 2000
+        log_state: true
+        log_next_state: false
+        log_on_change: true
+        change_threshold: 0.01
+        log_delta: true
+        log_task_context_once: true
+        log_full_features_first: true
+        signature_mode: semantic
+    
+    # Optimization
+    value_lr: 0.001
+    
+    # LLM integration
+    use_llm_shaping: true
+    use_llm_offline: true
+    shaping_weight: 0.7 # LLM评估的Reward影响
+    llm_call_frequency: 5
+    # llm_model: "kimi-k2-0905-preview" # Check available models
+    llm_model: "gpt-5.1"
+    cache_size: 1000
+    
+    # Custom API Configuration
+    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    # llm_base_url: "https://api.moonshot.cn/v1"
+    # llm_api_key: "your-key-here"
+    
+    # Analysis & Checkpoints
+    save_analyses: true
+    analysis_save_dir: "./analyses"
+    analyze_frequency: 1
+    save_checkpoints: false
+    checkpoint_frequency: 10
+    checkpoint_dir: "./checkpoints"
+    
+    # Device
+    device: "cuda"
+    
+    # Logging
+    log_statistics: true
+
+    # Debug (RewardShaper + compatibility fallback for one migration round)
+    debug: true
+    save_shaping_logs: true
+    reward_shaper_json_mode: true
+    reward_shaper_log_frequency: 1
+    reward_shaper_log_max_entries: 20000
+    reward_shaper_log_cache_hits: false
+
+  safety_monitor:
+    enabled: true
+    collision_penalty: 1.0
+    min_dist_threshold: 0.3
+    unsafe_state_penalty: 0.5
+
+  planner:
+    plan_config:
+      max_consecutive_wait_explore_scan_cycles: 4
+      use_task_decomposition: false
+      rebound:
+        enabled: true
+        max_retries: 3 # 降低最大重试次数
+        startup_grace_period: 20 # 增加启动宽限期
+        detectors:
+          context_overflow: false # 这个精炼过程比较难做所以先不实现,先实现几个基础的
+          graph_inconsistency: true
+          tool_failure_burst: true
+          progress_stagnation: true # 开启，配合宽限期和多agent过滤使用
+          immediate_error: true # 限制重试次数
+        context_compression:
+          enabled: false
+          max_prompt_chars: 35000
+          max_rebound_chars: 2600
+          max_evolve_chars: 1520
+          max_phase_chars: 2320
+          max_total_context_chars: 7000
+          preserve_last_turns: 13
+          protected_entity_sources: [task, episode, agent_descriptions, world_graph, scene_graph, termination_rules]
+          llm:
+            model: "gpt-5.1"
+            base_url: "https://api.huiyan-ai.cn/v1"
+            api_key_env: "OPENAI_API_KEY"
+            max_tokens: 2048
+            temperature: 0.2

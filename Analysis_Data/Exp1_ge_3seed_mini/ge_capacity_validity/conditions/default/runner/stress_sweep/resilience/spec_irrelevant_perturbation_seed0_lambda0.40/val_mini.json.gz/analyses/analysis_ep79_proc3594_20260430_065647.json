@@ -1,0 +1,36 @@
+{
+  "failure_points": [
+    18,
+    21,
+    22,
+    23,
+    24,
+    25,
+    30,
+    31,
+    35
+  ],
+  "root_causes": [
+    "Misinterpretation of the goal specification: the policy treated placing toy food items \"on\" chest_of_drawers_37 as sufficient, instead of correctly putting them inside a (new) chest of drawers, leading to only partial task satisfaction.",
+    "Incomplete task coverage: execution stopped with only 2/5 propositions complete (only the fire truck placed on a chest of drawers and the stuffed toy on the bed), leaving some toy food items and/or additional drawer targets unaddressed.",
+    "Poor progress-checking and termination condition: the episode ended despite unmet goals, indicating the policy or environment termination logic did not enforce completion of all specified propositions.",
+    "Insufficient reasoning about assignment of multiple receptacles: several chest_of_drawers targets were available (36, 37, 38, 40), but the policy did not plan or verify a correct mapping of all toy food items to appropriate drawers.",
+    "Lack of semantic distinction between surface placement and containment: the generic 'Rearrange[object, on, chest_of_drawers]' action was used where an 'in' or drawer-opening/placing action was needed for toy food items."
+  ],
+  "improvement_suggestions": [
+    "Tighten goal representations so that toy food items must be placed 'in' a chest of drawers (or inside a drawer sub-receptacle), and mark 'on top' placement as insufficient for goal satisfaction.",
+    "Augment the planner with an explicit goal-completion check that compares current world state against all task propositions and prevents episode termination until every object is in a valid target receptacle.",
+    "Introduce or prefer containment actions (e.g., OpenDrawer, PutIn) for objects that are semantically supposed to be stored inside furniture, and train the policy to distinguish between 'on' vs 'in' based on object category and language instructions.",
+    "Improve allocation logic for multiple valid receptacles by planning a mapping from each toy food item to a specific drawer (36, 37, 38, 40) before execution and updating if a chosen drawer becomes invalid or full.",
+    "Penalize or flag early termination when less than 100% of propositions are satisfied, even if recent individual actions receive 'Successful execution' feedback, to reduce partially completed episodes.",
+    "Enhance language-to-goal parsing so that phrases like \"in a new chest of drawers\" strongly bias the planner toward selecting an unused drawer and using containment rather than surface placement."
+  ],
+  "overall_assessment": "The agent successfully placed the fire truck on a chest of drawers and the stuffed toy on the bed, but mishandled the toy food goals and terminated with only 40% of the task completed. Execution reliability is low due to misinterpretation of containment goals and premature episode termination.",
+  "execution_quality_score": 0.35,
+  "episode_number": 1,
+  "episode_id": "79",
+  "episode_filename": "episode_79_0",
+  "proc_id": "3594",
+  "timestamp": "2026-04-30T06:56:47.712788",
+  "task_instruction": "Move the toy fire truck to the chest of drawers. Put the toy food items in a new chest of drawers. Place the stuffed toy on the bed."
+}

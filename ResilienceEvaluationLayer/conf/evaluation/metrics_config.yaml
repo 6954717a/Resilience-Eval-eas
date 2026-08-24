@@ -1,0 +1,39 @@
+# Metrics Configuration
+#
+# Dimension-based metrics organization for evaluation system.
+# Three core analytical dimensions:
+# 1. Rebound: Recovery from failures (B_epi, MTTR, MTBF, RR, T_rec)
+# 2. Stability: Output consistency under perturbation (β, σ²_V, N_replan, P_cbf)
+# 3. Degradation: Graceful degradation (AUC_loss, P_cliff, T_rec, L_bd, NRR)
+
+metrics:
+  # Rebound Dimension: Recovery from failures
+  rebound:
+    enabled: true
+    gamma: 2.0  # Backtrack weight for B_epi calculation (B_epi = N_retry + γ*N_backtrack)
+
+  # Stability Dimension: Policy stability under perturbation
+  stability:
+    enabled: true
+    use_saycan_scores: false  # Include SayCan-specific stability metrics (if planner supports it)
+    value_variance_window: 10  # Window size for computing value function variance
+
+  # Degradation Dimension: Graceful degradation during version evolution
+  degradation:
+    enabled: true
+    persistence_L: 3  # Low persistence window for regime detection
+    persistence_H: 3  # High persistence window for regime detection
+    deg_threshold: 0.3  # Degraded state threshold
+    nom_threshold: 0.7  # Nominal state threshold
+    cliff_threshold: 0.3  # Cliff detection threshold (ΔP > θ_cliff)
+
+# Independent Analysis Modules (preserved for backward compatibility)
+adca:
+  enabled: false
+  llm_base_url: null
+  llm_api_key: null
+
+critic:
+  enabled: true
+  log_critic_stats: true
+  analysis_export_enabled: true

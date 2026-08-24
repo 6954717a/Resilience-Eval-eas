@@ -1,0 +1,107 @@
+defaults:
+  - /planner: llm_centralized_planner
+  - /agent@agents.agent_0.config: oracle_rearrange_agent
+
+type: "centralized"
+truncate_length: 50
+output_dir: ${hydra:runtime.output_dir}
+save_video: False
+replan_thresh: 100
+log_critic_trajectory_export: True
+
+context_evolve:
+  enabled: true
+  batch_size: 15
+  max_history: 3
+  max_context_chars: 2000
+
+agents:
+  agent_0:
+    uid: 0
+
+# A2C Critic Configuration
+critic:
+  enabled: true
+
+  # Core RL parameters
+  gamma: 0.80                  # Discount factor
+  gae_lambda: 0.65             # GAE lambda parameter (balance bias-variance)
+  n_step: 5                    # n-step returns (not currently used with GAE)
+
+  # Network architecture
+  value_hidden_dims: [256, 128, 64]  # ValueNetwork hidden layer dimensions
+  dropout_rate: 0.1            # Dropout rate for regularization
+  state_encoder:
+    dims:
+      text: 384                # SentenceTransformer output dimension
+      numerical: 32            # Numerical features dimension
+      hidden: 256              # StateEncoder MLP hidden dimension
+      output: 128              # Final encoded state dimension
+    variants:
+      input: "full"
+      context: "full"
+    normalization:
+      distance: 10.0
+      count: 10.0
+      action_history_cap: 50
+    fusion:
+      dropout_rate: 0.1
+    debug:
+      enabled: true
+      dir: "./analyses/state_encoder"
+      frequency: 1
+      max_entries: 2000
+      log_state: true
+      log_next_state: false
+      log_on_change: true
+      change_threshold: 0.01
+      signature_mode: semantic
+
+  # Optimization
+  value_lr: 0.001              # Learning rate for value network (Adam)
+
+  # LLM integration (optional)
+  use_llm_shaping: true        # Enable LLM reward shaping
+  use_llm_offline: true        # Enable LLM offline trajectory analysis
+  shaping_weight: 0.3          # Weight for LLM reward bonus
+
+  # Planning-step alignment (NEW - recommended)
+  call_on_planning_steps: true # Align LLM calls with planning steps (not sim steps)
+  planning_step_window:
+    post_steps: 2              # Evaluate N sim steps after each replan
+  evaluate_on_rebound: true    # Trigger evaluation on Rebound recovery events
+
+  # Legacy frequency mode (backward compatible)
+  llm_call_frequency: 5        # Call LLM every N steps (only used if call_on_planning_steps=false)
+
+  llm_model: "gpt-4o"     # LLM model to use (gpt-4o-mini recommended for cost)
+
+  # LLM offline analysis
+  save_analyses: true          # Save trajectory analysis to JSON
+  analysis_save_dir: "./analyses"  # Directory for analysis reports
+  analyze_frequency: 1         # Analyze every N episodes
+
+  # Caching for LLM (cost control)
+  cache_size: 1000             # Max cache entries for reward shaping
+
+  # Checkpointing
+  save_checkpoints: true       # Enable checkpoint saving
+  checkpoint_frequency: 10     # Save checkpoint every N episodes
+  checkpoint_dir: "./checkpoints"  # Directory for model checkpoints
+
+  # Device configuration
+  device: "cpu"                # "cpu" or "cuda" (auto-fallback to cpu if cuda unavailable)
+  inference_mode: "deterministic"
+  analysis_export_enabled: true
+  analysis_export_include_world_state: true
+
+  # Logging
+  log_statistics: true         # Log training statistics at episode end
+
+  # Debug (RewardShaper + compatibility fallback for one migration round)
+  debug: true
+  save_shaping_logs: true
+  reward_shaper_json_mode: true
+  reward_shaper_log_frequency: 1
+  reward_shaper_log_max_entries: 20000
+  reward_shaper_log_cache_hits: false

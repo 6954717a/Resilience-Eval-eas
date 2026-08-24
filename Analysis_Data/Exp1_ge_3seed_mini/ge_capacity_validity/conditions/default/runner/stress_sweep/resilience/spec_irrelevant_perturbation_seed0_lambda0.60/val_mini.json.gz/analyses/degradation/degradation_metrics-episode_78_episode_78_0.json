@@ -1,0 +1,32 @@
+{
+  "episode_id": "78",
+  "episode_filename": "episode_78_0",
+  "degradation_metrics": {
+    "auc_loss": 1086.0,
+    "p_cliff": 1.0,
+    "t_rec": 0.0,
+    "l_bd": null,
+    "nrr": 1.0,
+    "bwt": null,
+    "fwt": null,
+    "r_t": null,
+    "in_degraded_state": true,
+    "recovery_event_count": 0,
+    "total_steps": 1086,
+    "episode_id": null,
+    "l_bd_scope": "evolve_only",
+    "l_bd_available": false
+  },
+  "summary": {
+    "auc_loss": 1086.0,
+    "p_cliff": 1.0,
+    "t_rec": 0.0,
+    "l_bd": null,
+    "nrr": 1.0,
+    "recovery_event_count": 0
+  },
+  "metadata": {
+    "l_bd_scope": "evolve_only",
+    "l_bd_available": false
+  }
+}

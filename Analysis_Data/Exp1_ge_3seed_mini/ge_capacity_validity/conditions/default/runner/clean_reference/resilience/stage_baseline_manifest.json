@@ -1,0 +1,46 @@
+{
+  "baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/clean_reference/resilience/stage_baseline.json",
+  "preferred_baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+  "persistent_baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+  "latest_alias_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline_latest.json",
+  "clean_spec_tags": [
+    "clean@seed=0@lambda=0.00"
+  ],
+  "export_file_count": 12,
+  "anchor_group_count": 8,
+  "baseline_entry_count": 8,
+  "signature": {
+    "dataset_path": "data/datasets/partnr_episodes/v0_0/val_mini.json.gz",
+    "episode_ids": [
+      "126",
+      "127",
+      "78",
+      "129",
+      "125",
+      "1",
+      "9",
+      "60",
+      "11",
+      "79",
+      "80",
+      "81"
+    ],
+    "clean_specs": [
+      "clean@seed=0@lambda=0.00"
+    ],
+    "seeds": [
+      0
+    ],
+    "intensities": [
+      0.0
+    ],
+    "baseline_json": "stage_baseline.json",
+    "output_subdir": "resilience",
+    "signature": "00cf5a3b6fd1",
+    "archive_filename": "stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json"
+  },
+  "episode_aggregate": {
+    "update_skipped": true,
+    "skip_reason": "incremental_clean_spec_updates_already_applied"
+  }
+}

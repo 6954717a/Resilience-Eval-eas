@@ -1,0 +1,120 @@
+# Resilience Evaluation Configuration
+#
+# Parameterizes the Rebound (C_rec), Stability (β̂) and Graceful Extensibility
+# (Contract Margin M_f, AUDC_f) experiments described in the resilience design
+# document §1-§3.
+#
+# Intended to be layered on top of a standard baseline config, e.g.::
+#
+#   python -m habitat_llm.examples.planner_demo_resilience \
+#     --config-name baselines/qwen3_centralized_zero_shot_react_summary_vllm_state_2.yaml \
+#     +evaluation.resilience=resilience_config \
+#     ++resilience.mode=stability
+#
+# The top-level key is ``resilience`` (single source of truth); individual
+# experiment runners read their sub-blocks directly.
+
+resilience:
+  # One of: "rebound" | "stability" | "margin"
+  mode: "stability"
+
+  # ------------------------------------------------------------------
+  # Output locations
+  # ------------------------------------------------------------------
+  output_subdir: "resilience"          # nested under ${paths.results_dir}
+  baseline_json: "stage_baseline.json" # produced by StageBaselineEstimator
+  version_history: "version_history.jsonl"  # consumed by MarginCollector (E3)
+
+  # ------------------------------------------------------------------
+  # Clean-pass stage baseline lifecycle
+  # ------------------------------------------------------------------
+  stage_baseline:
+    enabled: true
+    baseline_only: false
+    clean_tag: "clean"
+    write_persistent_copy: true
+    persistent_store_dir: "evaluation/stage_baselines"
+    latest_alias: "stage_baseline_latest.json"
+    episode_aggregate:
+      enabled: true
+      subdir: "episode_aggregates"
+      merge_existing: true
+      fallback_when_hash_missing: true
+      allow_partial_compose: true
+
+  # ------------------------------------------------------------------
+  # Perturbation grid (shared by E2 + E3)
+  # ------------------------------------------------------------------
+  perturbations:
+    - "clean"
+    - "room_shift"
+    - "holding_toggle"
+    - "object_state_toggle"
+    - "irrelevant_perturbation"
+    - "surface_rewrite"
+    - "filler_injection"
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7]
+  # Stress intensities along the λ axis used by BoundarySweep / AUDC.
+  # Must be in [0,1]; λ=0 is treated as the clean reference.
+  intensities: [1.0]
+
+  # ------------------------------------------------------------------
+  # Anchor episodes — if empty, falls back to the Hydra ``episode_ids``.
+  # Each entry is an episode id from the PartnR v0 dataset.
+  # ------------------------------------------------------------------
+  anchors: []
+
+  # ------------------------------------------------------------------
+  # C_rec hyperparameters (§1.3)
+  # ------------------------------------------------------------------
+  c_rec:
+    epsilon: 1.0e-6
+    huber_k: 3.0
+    confirm_steps: 2
+    # If null, the C_rec collector derives the healthy-hold length from τ^*
+    recovery_hold_steps: null
+    # Nominal per-event times used to convert cognitive events to SWE.
+    tau_pln: 0.1
+    tau_per: 0.1
+    tau_coord: 0.1
+
+  # ------------------------------------------------------------------
+  # β̂ aggregation (§2)
+  # ------------------------------------------------------------------
+  beta:
+    alpha: 0.5            # weight of normalized Levenshtein in β_out
+    weight_vv: 0.5        # convex weight of β_vv  in β̂
+    weight_out: 0.5       # convex weight of β_out in β̂
+
+  # ------------------------------------------------------------------
+  # Contract Margin thresholds (§3)
+  # ------------------------------------------------------------------
+  contract_margin:
+    tau_pc: 0.7
+    tau_q: 0.7
+    tau_safe: 0.05
+    tau_rec: 1.0
+    tau_stab: 0.2
+    epsilon: 1.0e-6
+    delta_boundary: 0.1
+    quantile_alpha: 0.25
+    bottom_k: 2
+    ratio_clip_max: 2.0
+    hard_gate_delta: 0.05
+    degradation_rate_threshold: 1.0
+    # Stress path for AUDC: keep in sync with BoundarySweep defaults.
+    stress_kind: "irrelevant_perturbation"
+    stress_lambdas: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
+  # ------------------------------------------------------------------
+  # Evolve sweep for E3 (consumed by planner_demo_evolve.py)
+  # ------------------------------------------------------------------
+  evolve:
+    enabled: true
+    epochs: 4
+    batch_size: 5
+    max_history: 3
+    # If true, planner_demo_evolve appends the anchor-set evaluation after
+    # every epoch to the version_history.jsonl so MarginCollector can compute
+    # M_f per evolve_step.
+    evaluate_anchors_per_epoch: true

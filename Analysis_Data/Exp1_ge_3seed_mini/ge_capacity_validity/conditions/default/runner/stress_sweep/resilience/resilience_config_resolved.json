@@ -1,0 +1,170 @@
+{
+  "resilience": {
+    "mode": "margin",
+    "perturbations": [
+      "irrelevant_perturbation"
+    ],
+    "seeds": [
+      0
+    ],
+    "intensities": [
+      0.2,
+      0.4,
+      0.6,
+      0.8,
+      1.0
+    ],
+    "output_subdir": "resilience",
+    "baseline_json": "stage_baseline.json",
+    "alpha": 0.5,
+    "beta_weight_vv": 0.5,
+    "beta_weight_out": 0.5,
+    "stage_baseline": {
+      "enabled": true,
+      "baseline_only": false,
+      "clean_tag": "clean",
+      "write_persistent_copy": true,
+      "persistent_store_dir": "evaluation/stage_baselines",
+      "latest_alias": "stage_baseline_latest.json",
+      "episode_aggregate": {
+        "enabled": true,
+        "subdir": "episode_aggregates",
+        "merge_existing": true,
+        "fallback_when_hash_missing": true,
+        "allow_partial_compose": true
+      }
+    },
+    "contract_margin": {
+      "tau_pc": 0.7,
+      "tau_q": 0.7,
+      "tau_rec": 35.0,
+      "tau_stab": 0.2,
+      "tau_safe": 0.05,
+      "quantile_alpha": 0.25,
+      "bottom_k": 2,
+      "ratio_clip_max": 2.0,
+      "hard_gate_delta": 0.05,
+      "degradation_rate_threshold": 1.0,
+      "missing_safety_policy": "assume_zero",
+      "missing_safety_default": 0.0,
+      "stress_lambdas": [
+        0.6,
+        0.8,
+        1.0
+      ]
+    }
+  },
+  "specs": [
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 0.2,
+      "extras": {}
+    },
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 0.4,
+      "extras": {}
+    },
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 0.6,
+      "extras": {}
+    },
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 0.8,
+      "extras": {}
+    },
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 1.0,
+      "extras": {}
+    }
+  ],
+  "executed_specs": [
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 0.2,
+      "extras": {}
+    },
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 0.4,
+      "extras": {}
+    },
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 0.6,
+      "extras": {}
+    },
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 0.8,
+      "extras": {}
+    },
+    {
+      "kind": "irrelevant_perturbation",
+      "seed": 0,
+      "intensity": 1.0,
+      "extras": {}
+    }
+  ],
+  "stage_baseline_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+  "stage_baseline_exists": true,
+  "postprocess_modes": [],
+  "episode_aggregate_fallback_path": null,
+  "stage_baseline_startup_resolution": {
+    "signature": {
+      "dataset_path": "data/datasets/partnr_episodes/v0_0/val_mini.json.gz",
+      "episode_ids": [
+        "126",
+        "127",
+        "78",
+        "129",
+        "125",
+        "1",
+        "9",
+        "60",
+        "11",
+        "79",
+        "80",
+        "81"
+      ],
+      "clean_specs": [],
+      "seeds": [
+        0
+      ],
+      "intensities": [
+        0.2,
+        0.4,
+        0.6,
+        0.8,
+        1.0
+      ],
+      "baseline_json": "stage_baseline.json",
+      "output_subdir": "resilience",
+      "signature": "59c6bf8438fe",
+      "archive_filename": "stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__59c6bf8438fe.json"
+    },
+    "run_local_hash_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/outputs/habitat_llm/2026-04-30_04-07-07-val_mini.json/results/expq1_ge/ge_capacity_validity/conditions/default/runner/stress_sweep/resilience/stage_baseline.json",
+    "run_local_hash_exists": false,
+    "persistent_hash_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__59c6bf8438fe.json",
+    "persistent_hash_exists": false,
+    "episode_aggregate_enabled": true,
+    "source": "explicit_override",
+    "selected_path": "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/partnr-planner/habitat_llm/evaluation/stage_baselines/stage_baseline__val_mini.json__eps-126_127_78_129_125_1-etc__s-0__00cf5a3b6fd1.json",
+    "fallback_reason": "",
+    "selected_path_exists": true
+  },
+  "episode_aggregate_incremental_updates": [],
+  "episode_aggregate_refresh_resolutions": []
+}

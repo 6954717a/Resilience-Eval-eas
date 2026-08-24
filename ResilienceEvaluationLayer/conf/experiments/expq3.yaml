@@ -1,0 +1,183 @@
+# @package _global_
+
+defaults:
+  - /baselines/qwen3_centralized_zero_shot_react_summary_vllm_state
+  - /evaluation/resilience_config
+  - _self_
+
+expq3:
+  output_subdir: "expq3"
+  baseline_model: "baselines/qwen3_centralized_zero_shot_react_summary_vllm_state"
+  optimized_model: "condition_defined_patch"
+  shared:
+    working_set: [127, 126]
+  subexperiments:
+    rebound_optimization:
+      enabled: true
+      argument: "验证 monitor/context 修正注入是否能降低恢复代价，尤其是认知恢复代价。"
+      headline_metric: "rebound_c_rec"
+      support_metrics:
+        - "rebound_c_rec_cog"
+        - "rebound_num_recovery_windows"
+        - "task_percent_complete"
+      episode_ids: [127, 126]
+      postprocess: ["stability"]
+      summary_group_keys: ["condition_name", "perturbation_type"]
+      conditions:
+        - name: "baseline"
+          label: "baseline"
+          patch: {}
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "rebound"
+                  perturbations: ["clean"]
+                  seeds: [0]
+                  intensities: [1.0]
+            - label: "perturbed_main"
+              patch:
+                resilience:
+                  mode: "rebound"
+                  perturbations: ["surface_rewrite"]
+                  seeds: [0]
+                  intensities: [1.0]
+        - name: "optimized"
+          label: "rebound_context_fix"
+          patch:
+            evaluation:
+              adca:
+                enabled: true
+              planner:
+                plan_config:
+                  rebound:
+                    context_compression:
+                      enabled: true
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "rebound"
+                  perturbations: ["clean"]
+                  seeds: [0]
+                  intensities: [1.0]
+            - label: "perturbed_main"
+              patch:
+                resilience:
+                  mode: "rebound"
+                  perturbations: ["surface_rewrite"]
+                  seeds: [0]
+                  intensities: [1.0]
+
+    stability_optimization:
+      enabled: true
+      argument: "验证面向稳定性的 prompt/state 约束代理优化是否提升 β-stability。默认提供可运行的保守 patch，后续可替换为显式 anchoring 实现。"
+      headline_metric: "stability_beta_neighborhood"
+      support_metrics:
+        - "stability_beta_vv"
+        - "stability_beta_out"
+        - "task_percent_complete"
+      episode_ids: [126, 127]
+      postprocess: ["stability"]
+      summary_group_keys: ["condition_name", "perturbation_type"]
+      conditions:
+        - name: "baseline"
+          label: "baseline"
+          patch: {}
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "stability"
+                  perturbations: ["clean"]
+                  seeds: [0]
+                  intensities: [1.0]
+            - label: "perturbed_main"
+              patch:
+                resilience:
+                  mode: "stability"
+                  perturbations: ["surface_rewrite"]
+                  seeds: [0]
+                  intensities: [1.0]
+        - name: "optimized"
+          label: "stability_proxy_patch"
+          patch:
+            evaluation:
+              adca:
+                enabled: true
+              critic:
+                use_llm_shaping: true
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "stability"
+                  perturbations: ["clean"]
+                  seeds: [0]
+                  intensities: [1.0]
+            - label: "perturbed_main"
+              patch:
+                resilience:
+                  mode: "stability"
+                  perturbations: ["surface_rewrite"]
+                  seeds: [0]
+                  intensities: [1.0]
+
+    ge_optimization:
+      enabled: true
+      argument: "验证高压力区间下的 graceful fallback / contract-aware 代理优化是否抬升 Margin 与 AUDC。默认 patch 使用当前仓库已有可运行开关。"
+      headline_metric: "ge_contract_margin_min"
+      support_metrics:
+        - "ge_audc_f"
+        - "ge_boundary_hit"
+        - "task_percent_complete"
+      episode_ids: [127, 126]
+      postprocess: ["stability", "margin"]
+      summary_group_keys: ["condition_name", "stress_lambda"]
+      conditions:
+        - name: "baseline"
+          label: "baseline"
+          patch: {}
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "margin"
+                  perturbations: ["clean"]
+                  seeds: [0]
+                  intensities: [1.0]
+            - label: "stress_sweep"
+              patch:
+                resilience:
+                  mode: "margin"
+                  perturbations: ["irrelevant_perturbation"]
+                  seeds: [0]
+                  intensities: [0.0, 0.2, 0.5, 0.8, 1.0]
+        - name: "optimized"
+          label: "ge_proxy_patch"
+          patch:
+            evaluation:
+              adca:
+                enabled: true
+              critic:
+                use_llm_shaping: true
+              planner:
+                plan_config:
+                  rebound:
+                    context_compression:
+                      enabled: true
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "margin"
+                  perturbations: ["clean"]
+                  seeds: [0]
+                  intensities: [1.0]
+            - label: "stress_sweep"
+              patch:
+                resilience:
+                  mode: "margin"
+                  perturbations: ["irrelevant_perturbation"]
+                  seeds: [0]
+                  intensities: [0.0, 0.2, 0.5, 0.8, 1.0]

@@ -1,0 +1,71 @@
+# @package _global_
+
+defaults:
+  - /baselines/qwen35_centralized_zero_shot_react_summary_vllm_state
+  - /evaluation/resilience_config
+  - _self_
+
+expq2_inner:
+  output_subdir: "expq2_inner"
+  baseline_model: "baselines/qwen35_centralized_zero_shot_react_summary_vllm_state"
+  optimized_model: null
+  shared:
+    working_set: [78, 127, 126, 11, 79, 80, 81, 128, 129, 125, 1, 9, 60, 73, 168, 237]
+  subexperiments:
+    internal_stress_proxy:
+      enabled: true
+      argument: "在当前 context_evolve proxy 定义下，内部 context/memory 压力会放大同等外部扰动的影响。"
+      headline_metric: "ge_contract_margin_min"
+      support_metrics:
+        - "rebound_c_rec"
+        - "stability_beta_neighborhood"
+        - "task_percent_complete"
+      episode_ids: [78, 127, 126, 11, 79, 80, 81, 128]
+      postprocess: ["stability", "margin"]
+      summary_group_keys: ["condition_name", "perturbation_type"]
+      conditions:
+        - name: "context_evolve_off"
+          label: "context_evolve=false"
+          patch:
+            evaluation:
+              context_evolve:
+                enabled: false
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "stability"
+                  perturbations: ["clean"]
+                  seeds: [0, 1, 2]
+                  intensities: [1.0]
+            - label: "perturbed_main"
+              patch:
+                resilience:
+                  mode: "stability"
+                  perturbations: ["surface_rewrite"]
+                  seeds: [0, 1, 2]
+                  intensities: [0.5]
+        - name: "context_evolve_on"
+          label: "context_evolve=true(proxy)"
+          patch:
+            evaluation:
+              context_evolve:
+                enabled: true
+                batch_size: 8
+                max_history: 3
+                max_context_chars: 2000
+          phases:
+            - label: "clean_reference"
+              patch:
+                resilience:
+                  mode: "stability"
+                  perturbations: ["clean"]
+                  seeds: [0, 1, 2]
+                  intensities: [1.0]
+            - label: "perturbed_main"
+              patch:
+                resilience:
+                  mode: "stability"
+                  perturbations: ["surface_rewrite"]
+                  seeds: [0, 1, 2]
+                  intensities: [0.5]

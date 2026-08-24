@@ -1,0 +1,4 @@
+perception_scan_tool:
+  _target_: habitat_llm.tools.rebound.scan_tool.PerceptionScanTool
+  _recursive_: False
+
