@@ -9,9 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="https://6954717a.github.io/resilience_evaluation_web/">Web</a> |
-  <a href="https://6954717a.github.io/resilience_evaluation_web/run.html">Runbook</a> |
-  <a href="https://github.com/6954717a/Resilience-Eval-eas">Code</a>
+  <a href="https://6954717a.github.io/resilience_evaluation_web/" title="Open the project website">
+    <img src="https://img.shields.io/badge/Project_Web-2563EB?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white" alt="Project Web"/>
+  </a>
+  <a href="https://6954717a.github.io/resilience_evaluation_web/run.html" title="Open the runbook">
+    <img src="https://img.shields.io/badge/Runbook-0F766E?style=for-the-badge&amp;logo=readthedocs&amp;logoColor=white" alt="Runbook"/>
+  </a>
+  <a href="https://github.com/6954717a/Resilience-Eval-eas" title="Open the source code">
+    <img src="https://img.shields.io/badge/Source_Code-181717?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="Source Code"/>
+  </a>
 </p>
 
 EAS Resilience Evaluation is based on the Habitat 3.0 stack (Habitat-Sim 0.3.3 in the pinned PARTNR runtime); its dataset and benchmark formats follow [PARTNR Planner](https://github.com/facebookresearch/partnr-planner). Resilience Evaluation uses an LLM as the critic and calculates episode-level stage baselines from EAS execution experience.
