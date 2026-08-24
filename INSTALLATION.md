@@ -11,7 +11,7 @@
 ## Step 1: Clone Repository
 
 ```bash
-git clone -c core.longpaths=true https://github.com/YOUR_GITHUB_ORG/resilience-evaluation.git ResEval
+git clone -c core.longpaths=true https://github.com/6954717a/Resilience-Eval-eas.git ResEval
 cd ResEval
 ```
 

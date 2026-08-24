@@ -156,7 +156,7 @@ The GE row is deliberately labeled as pilot evidence. The benchmark and validity
 Install the package dependencies:
 
 ```bash
-git clone -c core.longpaths=true https://github.com/YOUR_GITHUB_ORG/resilience-evaluation.git ResEval
+git clone -c core.longpaths=true https://github.com/6954717a/Resilience-Eval-eas.git ResEval
 cd ResEval
 
 conda create -n resilience python=3.10
@@ -196,7 +196,7 @@ python Analysis_Code/theory_process/run_analysis_2026-01-18_rebound.py
 We follow the Habitat-LLM infrastructure, and form our evaluation layer based on the simulator. The **inner** `ResilienceEvaluationLayer/` directory is the main package where environments setup, EAS executes tasks, resilience probes, metric code, Hydra experiment configs, and aggregation entry points live.
 
 ```text
-resilience-evaluation/                             # repository root (use ResEval locally on Windows)
+Resilience-Eval-eas/                              # repository root (use ResEval locally on Windows)
 |-- ResilienceEvaluationLayer/                     # core package: sim + planners + resilience evaluation
 |   |-- evaluation/                                # process-aware evaluation layer (primary)
 |   |   |-- metrics/                               # rebound/, stability/, extensibility/, degradation/
