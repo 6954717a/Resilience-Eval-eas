@@ -194,7 +194,7 @@ def get_parent_ao_and_joint_idx(
     parent_fur = aom.get_object_by_handle(p_fur_handle)
 
     # get the HabReceptacle from the EnvironmentInterface receptacles cache
-    # TODO: @zephirefaith receptacle cache needs to be agentic as well
+    # TODO: Make the receptacle cache agent-specific.
     hab_rec = env.perception.receptacles[
         get_receptacle_index(rec.sim_handle, env.perception.receptacles)
     ]

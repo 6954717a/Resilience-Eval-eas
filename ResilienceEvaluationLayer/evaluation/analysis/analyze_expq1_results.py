@@ -11,6 +11,7 @@ import argparse
 import json
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -35,7 +36,16 @@ REBOUND_BLOCK = "rebound_validity"
 STABILITY_BLOCK = "stability_validity"
 GE_BLOCK = "ge_validity"
 
+REQUIRED_GE_STRESS_LAMBDAS = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+REBOUND_PAIR_COLUMNS = (
+    "episode_id",
+    "perturbation_seed",
+    "perturbation_type",
+    "perturbation_intensity",
+)
+
 REBOUND_METRICS = [
+    "c_rec_index_observed",
     "c_rec_observed",
     "rebound_c_rec_cog",
     "rebound_c_rec_phy",
@@ -54,7 +64,7 @@ REBOUND_METRICS = [
 
 STABILITY_METRICS = [
     "beta_hat",
-    "beta_vv",
+    "beta_trajectory",
     "beta_out",
     "beta_action",
     "beta_progress",
@@ -69,6 +79,7 @@ NUMERIC_COLUMNS = {
     "stress_lambda",
     "rebound_baseline_loaded",
     "rebound_c_rec",
+    "rebound_c_rec_index_100",
     "rebound_c_rec_cog",
     "rebound_c_rec_phy",
     "rebound_c_rec_state_debt",
@@ -83,13 +94,13 @@ NUMERIC_COLUMNS = {
     "task_percent_complete",
     "task_state_success",
     "stability_beta_neighborhood",
-    "stability_beta_vv",
+    "stability_beta_trajectory",
     "stability_beta_out",
     "stability_beta_action",
     "stability_beta_progress",
     "stability_beta_success",
     "stability_beta_neighborhood_valid",
-    "ge_contract_margin_min",
+    "ge_margin_soft",
     "ge_audc_f",
     "ge_cell_valid",
     "ge_valid_lambda_coverage",
@@ -97,7 +108,7 @@ NUMERIC_COLUMNS = {
     "ge_boundary_hit",
     "ge_hard_boundary_hit",
     "beta_hat",
-    "beta_vv",
+    "beta_trajectory",
     "beta_out",
     "n_clean",
     "n_perturbed",
@@ -191,7 +202,8 @@ def load_stability_beta(spec: RunSpec) -> pd.DataFrame:
         / "conditions"
         / "default"
         / "analysis"
-        / "resilience_beta.csv"
+        / "statistics"
+        / "stability_beta_neighborhood.csv"
     )
     df = read_csv_if_exists(path)
     if df is None:
@@ -235,6 +247,23 @@ def parse_ge_spec(path: Path) -> Dict[str, Any]:
     return result
 
 
+def _missing_required_stress_lambdas(
+    observed: Sequence[float],
+    required: Sequence[float] = REQUIRED_GE_STRESS_LAMBDAS,
+) -> List[float]:
+    """Return planned GE stress levels absent from the observed sweep."""
+
+    finite_observed = [float(value) for value in observed if np.isfinite(value)]
+    return [
+        float(target)
+        for target in required
+        if not any(
+            math.isclose(float(target), value, rel_tol=0.0, abs_tol=1.0e-9)
+            for value in finite_observed
+        )
+    ]
+
+
 def load_ge_partial(spec: RunSpec) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     ge_root = spec.root / "results" / "expq1" / GE_BLOCK
     csv_paths = sorted(ge_root.rglob("episode_metrics.csv")) if ge_root.exists() else []
@@ -254,8 +283,8 @@ def load_ge_partial(spec: RunSpec) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         frames.append(df)
 
     rows = pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame()
-    margin_cells = sorted(ge_root.rglob("resilience_margin_cells.csv")) if ge_root.exists() else []
-    margin_audc = sorted(ge_root.rglob("resilience_margin_audc.csv")) if ge_root.exists() else []
+    margin_cells = sorted(ge_root.rglob("ge_boundary_cells.csv")) if ge_root.exists() else []
+    margin_audc = sorted(ge_root.rglob("ge_boundary_curve_statistics.csv")) if ge_root.exists() else []
     block_summary = ge_root / "summary.csv"
     block_raw = ge_root / "raw_rollouts.csv"
     phases = sorted(rows["phase_label"].dropna().astype(str).unique().tolist()) if not rows.empty else []
@@ -265,6 +294,12 @@ def load_ge_partial(spec: RunSpec) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         .unique()
         .tolist()
     ) if not rows.empty else []
+    missing_stress_lambdas = _missing_required_stress_lambdas(stress_lambdas)
+    stress_grid_complete = not missing_stress_lambdas
+    stress_lambda_coverage = float(
+        (len(REQUIRED_GE_STRESS_LAMBDAS) - len(missing_stress_lambdas))
+        / len(REQUIRED_GE_STRESS_LAMBDAS)
+    )
     has_stress_sweep = "stress_sweep" in phases
     formal_estimable = bool(
         block_summary.exists()
@@ -272,7 +307,7 @@ def load_ge_partial(spec: RunSpec) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         and margin_cells
         and margin_audc
         and has_stress_sweep
-        and len(stress_lambdas) > 1
+        and stress_grid_complete
     )
     reasons: List[str] = []
     if not block_summary.exists():
@@ -285,8 +320,8 @@ def load_ge_partial(spec: RunSpec) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         reasons.append("missing_margin_audc")
     if not has_stress_sweep:
         reasons.append("missing_stress_sweep_rows")
-    if len(stress_lambdas) <= 1:
-        reasons.append("insufficient_lambda_grid")
+    if not stress_grid_complete:
+        reasons.append("requires_multi_stress_sweep")
     diagnostics = {
         "model": spec.model,
         "run_id": spec.root.name,
@@ -295,6 +330,10 @@ def load_ge_partial(spec: RunSpec) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         "partial_rows": int(len(rows)),
         "phases": phases,
         "stress_lambdas": stress_lambdas,
+        "required_stress_lambdas": list(REQUIRED_GE_STRESS_LAMBDAS),
+        "missing_stress_lambdas": missing_stress_lambdas,
+        "stress_grid_complete": stress_grid_complete,
+        "stress_lambda_coverage": stress_lambda_coverage,
         "margin_cells_files": [str(path) for path in margin_cells],
         "margin_audc_files": [str(path) for path in margin_audc],
         "formal_ge_estimable": formal_estimable,
@@ -385,6 +424,100 @@ def summarize_metric_group(
     return pd.DataFrame(rows)
 
 
+def _normalize_pair_key_value(value: Any, column: str = "") -> Any:
+    if pd.isna(value):
+        return None
+    if isinstance(value, np.generic):
+        value = value.item()
+    if column in {"episode_id", "perturbation_type"}:
+        text = str(value).strip()
+        return text or None
+    if column == "perturbation_seed":
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        return int(numeric) if math.isfinite(numeric) and numeric.is_integer() else None
+    if column in {"perturbation_intensity", "stress_lambda"}:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        return numeric if math.isfinite(numeric) else None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _pair_key_set(frame: pd.DataFrame, pair_cols: Sequence[str]) -> set[Tuple[Any, ...]]:
+    if frame.empty or not pair_cols:
+        return set()
+    return {
+        tuple(
+            _normalize_pair_key_value(value, column)
+            for column, value in zip(pair_cols, values)
+        )
+        for values in frame[list(pair_cols)].itertuples(index=False, name=None)
+        if all(
+            _normalize_pair_key_value(value, column) is not None
+            for column, value in zip(pair_cols, values)
+        )
+    }
+
+
+def _serialize_pair_keys(
+    keys: Iterable[Tuple[Any, ...]], pair_cols: Sequence[str]
+) -> str:
+    ordered = sorted(
+        keys,
+        key=lambda key: tuple("" if value is None else str(value) for value in key),
+    )
+    records = [dict(zip(pair_cols, key)) for key in ordered]
+    return json.dumps(records, ensure_ascii=False, separators=(",", ":"))
+
+
+def _serialize_missing_episode_ids(
+    keys: Iterable[Tuple[Any, ...]], pair_cols: Sequence[str]
+) -> str:
+    if "episode_id" not in pair_cols:
+        return "[]"
+    episode_idx = list(pair_cols).index("episode_id")
+    episode_ids = {
+        key[episode_idx]
+        for key in keys
+        if key[episode_idx] is not None
+    }
+    ordered = sorted(episode_ids, key=lambda value: str(value))
+    return json.dumps(ordered, ensure_ascii=False, separators=(",", ":"))
+
+
+def _materialize_pairing_intensity(df: pd.DataFrame) -> pd.DataFrame:
+    """Use perturbation intensity as the canonical fourth pairing coordinate."""
+
+    if df.empty:
+        return df
+    has_intensity = "perturbation_intensity" in df.columns
+    has_stress = "stress_lambda" in df.columns
+    if not has_intensity and not has_stress:
+        return df
+    materialized = df.copy()
+    intensity = (
+        pd.to_numeric(materialized["perturbation_intensity"], errors="coerce")
+        if has_intensity
+        else pd.Series(np.nan, index=materialized.index, dtype=float)
+    )
+    if has_stress:
+        intensity = intensity.combine_first(
+            pd.to_numeric(materialized["stress_lambda"], errors="coerce")
+        )
+    materialized["perturbation_intensity"] = intensity
+    return materialized
+
+
 def paired_or_unpaired_test(
     df: pd.DataFrame,
     *,
@@ -394,6 +527,7 @@ def paired_or_unpaired_test(
     metric: str,
     pair_cols: Sequence[str],
     context: str,
+    require_paired: bool = False,
 ) -> Dict[str, Any]:
     base: Dict[str, Any] = {
         "context": context,
@@ -410,6 +544,27 @@ def paired_or_unpaired_test(
         "delta_b_minus_a": np.nan,
         "p_value": np.nan,
         "effect_size_cliffs_delta": np.nan,
+        "requested_pair_columns": json.dumps(list(pair_cols), separators=(",", ":")),
+        "pair_key_columns": "[]",
+        "missing_pair_columns": "[]",
+        "n_unique_pair_keys_a": 0,
+        "n_unique_pair_keys_b": 0,
+        "n_union_pair_keys": 0,
+        "pair_key_coverage": np.nan,
+        "paired_observation_coverage": np.nan,
+        "n_missing_pair_keys_in_a": 0,
+        "n_missing_pair_keys_in_b": 0,
+        "missing_pair_keys_in_a": "[]",
+        "missing_pair_keys_in_b": "[]",
+        "missing_episode_ids_in_a": "[]",
+        "missing_episode_ids_in_b": "[]",
+        "n_invalid_pair_rows_a": 0,
+        "n_invalid_pair_rows_b": 0,
+        "n_duplicate_pair_keys_a": 0,
+        "n_duplicate_pair_keys_b": 0,
+        "duplicate_pair_keys_a": "[]",
+        "duplicate_pair_keys_b": "[]",
+        "require_paired": bool(require_paired),
         "note": "",
     }
     if df.empty or metric not in df.columns or group_col not in df.columns:
@@ -429,22 +584,141 @@ def paired_or_unpaired_test(
         base["delta_b_minus_a"] = float(base["mean_b"] - base["mean_a"])
     base["effect_size_cliffs_delta"] = cliffs_delta(b[metric], a[metric])
 
-    usable_pair_cols = [col for col in pair_cols if col in sub.columns]
+    requested_pair_cols = list(dict.fromkeys(pair_cols))
+    # A compared group cannot also be part of its own matching identity. This
+    # retains the four-coordinate key for Judge/model comparisons, while a
+    # perturbation-vs-perturbation test naturally matches on the other three.
+    usable_pair_cols = [
+        col for col in requested_pair_cols if col in sub.columns and col != group_col
+    ]
+    missing_pair_cols = [
+        col for col in requested_pair_cols if col not in sub.columns and col != group_col
+    ]
+    base["pair_key_columns"] = json.dumps(usable_pair_cols, separators=(",", ":"))
+    base["missing_pair_columns"] = json.dumps(missing_pair_cols, separators=(",", ":"))
     if usable_pair_cols:
-        grouped = (
-            sub.groupby(usable_pair_cols + [group_col], dropna=False)[metric]
-            .mean()
-            .reset_index()
+        keyed = sub.copy()
+        keyed["_pair_key"] = [
+            tuple(
+                _normalize_pair_key_value(value, column)
+                for column, value in zip(usable_pair_cols, values)
+            )
+            for values in keyed[usable_pair_cols].itertuples(index=False, name=None)
+        ]
+        valid_key_mask = keyed["_pair_key"].map(
+            lambda key: all(value is not None for value in key)
         )
-        pivot = grouped.pivot_table(
+        invalid_keyed = keyed[~valid_key_mask]
+        keyed = keyed[valid_key_mask].copy()
+        base["n_invalid_pair_rows_a"] = int(
+            (invalid_keyed[group_col] == group_a).sum()
+        )
+        base["n_invalid_pair_rows_b"] = int(
+            (invalid_keyed[group_col] == group_b).sum()
+        )
+
+        cell_counts = Counter(
+            (str(group), key)
+            for group, key in keyed[[group_col, "_pair_key"]].itertuples(
+                index=False, name=None
+            )
+        )
+        duplicate_keys_a = {
+            key
+            for (group, key), count in cell_counts.items()
+            if group == str(group_a) and count > 1
+        }
+        duplicate_keys_b = {
+            key
+            for (group, key), count in cell_counts.items()
+            if group == str(group_b) and count > 1
+        }
+        base["n_duplicate_pair_keys_a"] = len(duplicate_keys_a)
+        base["n_duplicate_pair_keys_b"] = len(duplicate_keys_b)
+        base["duplicate_pair_keys_a"] = _serialize_pair_keys(
+            duplicate_keys_a, usable_pair_cols
+        )
+        base["duplicate_pair_keys_b"] = _serialize_pair_keys(
+            duplicate_keys_b, usable_pair_cols
+        )
+
+        keys_a = {
+            key
+            for group, key in keyed[[group_col, "_pair_key"]].itertuples(
+                index=False, name=None
+            )
+            if str(group) == str(group_a)
+        }
+        keys_b = {
+            key
+            for group, key in keyed[[group_col, "_pair_key"]].itertuples(
+                index=False, name=None
+            )
+            if str(group) == str(group_b)
+        }
+        pairable_keys_a = keys_a - duplicate_keys_a
+        pairable_keys_b = keys_b - duplicate_keys_b
+        matched_keys = pairable_keys_a & pairable_keys_b
+        union_keys = keys_a | keys_b
+        missing_in_a = keys_b - keys_a
+        missing_in_b = keys_a - keys_b
+        base["n_unique_pair_keys_a"] = len(keys_a)
+        base["n_unique_pair_keys_b"] = len(keys_b)
+        base["n_union_pair_keys"] = len(union_keys)
+        base["n_pairs"] = len(matched_keys)
+        base["pair_key_coverage"] = (
+            float(len(matched_keys) / len(union_keys)) if union_keys else np.nan
+        )
+        observation_denominator = len(a) + len(b)
+        base["paired_observation_coverage"] = (
+            float(2 * len(matched_keys) / observation_denominator)
+            if observation_denominator
+            else np.nan
+        )
+        base["n_missing_pair_keys_in_a"] = len(missing_in_a)
+        base["n_missing_pair_keys_in_b"] = len(missing_in_b)
+        base["missing_pair_keys_in_a"] = _serialize_pair_keys(
+            missing_in_a, usable_pair_cols
+        )
+        base["missing_pair_keys_in_b"] = _serialize_pair_keys(
+            missing_in_b, usable_pair_cols
+        )
+        base["missing_episode_ids_in_a"] = _serialize_missing_episode_ids(
+            missing_in_a, usable_pair_cols
+        )
+        base["missing_episode_ids_in_b"] = _serialize_missing_episode_ids(
+            missing_in_b, usable_pair_cols
+        )
+        pairing_integrity_reasons: List[str] = []
+        if missing_pair_cols:
+            pairing_integrity_reasons.append("pair_columns_missing")
+        if base["n_invalid_pair_rows_a"] or base["n_invalid_pair_rows_b"]:
+            pairing_integrity_reasons.append("pair_key_values_missing")
+        if duplicate_keys_a or duplicate_keys_b:
+            pairing_integrity_reasons.append("duplicate_pair_keys")
+        if pairing_integrity_reasons:
+            base["test_name"] = "invalid_pairing_cells"
+            base["note"] = ";".join(pairing_integrity_reasons)
+            return base
+
+        pairable = keyed[
+            keyed.apply(
+                lambda row: row["_pair_key"] in matched_keys
+                and cell_counts[(str(row[group_col]), row["_pair_key"])] == 1,
+                axis=1,
+            )
+        ].copy()
+        for index, column in enumerate(usable_pair_cols):
+            pairable[column] = pairable["_pair_key"].map(
+                lambda key, position=index: key[position]
+            )
+        pivot = pairable.pivot(
             index=usable_pair_cols,
             columns=group_col,
             values=metric,
-            aggfunc="mean",
         ).dropna(subset=[group_a, group_b], how="any")
         if len(pivot) >= 2:
             diffs = pivot[group_b] - pivot[group_a]
-            base["n_pairs"] = int(len(pivot))
             base["test_name"] = "paired_wilcoxon"
             try:
                 if np.allclose(diffs.to_numpy(dtype=float), 0.0):
@@ -455,6 +729,16 @@ def paired_or_unpaired_test(
             except Exception as exc:
                 base["note"] = f"wilcoxon_failed:{exc}"
             return base
+
+        if require_paired:
+            base["test_name"] = "insufficient_paired_samples"
+            base["note"] = "need_at_least_two_unique_pairs"
+            return base
+
+    elif require_paired:
+        base["test_name"] = "invalid_pairing_cells"
+        base["note"] = "pair_columns_missing"
+        return base
 
     if len(a) >= 2 and len(b) >= 2:
         base["test_name"] = "mann_whitney_u"
@@ -475,6 +759,7 @@ def prepare_rebound(raw: pd.DataFrame) -> pd.DataFrame:
     for col in [
         "rebound_baseline_loaded",
         "rebound_c_rec",
+        "rebound_c_rec_index_100",
         "rebound_c_rec_cog",
         "rebound_c_rec_phy",
         "rebound_c_rec_state_debt",
@@ -497,6 +782,52 @@ def prepare_rebound(raw: pd.DataFrame) -> pd.DataFrame:
         df["c_rec_eligible"] = df.get("rebound_baseline_loaded", 0).fillna(0) >= 1.0
     df["c_rec_warmup"] = ~df["c_rec_eligible"]
     df["c_rec_observed"] = np.where(df["c_rec_eligible"], df.get("rebound_c_rec", np.nan), np.nan)
+    raw_cost = (
+        pd.to_numeric(df["rebound_c_rec"], errors="coerce")
+        if "rebound_c_rec" in df.columns
+        else pd.Series(np.nan, index=df.index, dtype=float)
+    )
+    artifact_index = (
+        pd.to_numeric(df["rebound_c_rec_index_100"], errors="coerce")
+        if "rebound_c_rec_index_100" in df.columns
+        else pd.Series(np.nan, index=df.index, dtype=float)
+    )
+    derived_index = 100.0 - 100.0 / (1.0 + raw_cost)
+    derived_index = derived_index.where(
+        np.isfinite(raw_cost) & raw_cost.ge(0.0)
+    ).clip(upper=np.nextafter(100.0, 0.0))
+
+    artifact_present = np.isfinite(artifact_index)
+    artifact_valid = artifact_present & artifact_index.ge(0.0) & artifact_index.lt(100.0)
+    comparable = artifact_present & np.isfinite(derived_index)
+    artifact_matches = pd.Series(pd.NA, index=df.index, dtype="boolean")
+    artifact_matches.loc[comparable] = np.isclose(
+        artifact_index.loc[comparable],
+        derived_index.loc[comparable],
+        rtol=1.0e-9,
+        atol=1.0e-9,
+    )
+    artifact_abs_error = (artifact_index - derived_index).abs().where(comparable)
+    artifact_status = pd.Series("missing", index=df.index, dtype="object")
+    artifact_status.loc[artifact_present & ~artifact_valid] = "invalid_range"
+    artifact_status.loc[artifact_valid & ~np.isfinite(derived_index)] = "raw_unavailable"
+    artifact_status.loc[comparable & artifact_matches.fillna(False)] = "matches_raw"
+    artifact_status.loc[comparable & ~artifact_matches.fillna(False)] = "mismatch"
+
+    # The bounded index is a display/description projection of the raw paper
+    # cost. Artifact-provided values are retained only as audit evidence.
+    df["rebound_c_rec_index_100_artifact"] = artifact_index
+    df["rebound_c_rec_index_100_artifact_present"] = artifact_present
+    df["rebound_c_rec_index_100_artifact_valid"] = artifact_valid
+    df["rebound_c_rec_index_100_artifact_matches_raw"] = artifact_matches
+    df["rebound_c_rec_index_100_artifact_abs_error"] = artifact_abs_error
+    df["rebound_c_rec_index_100_artifact_status"] = artifact_status
+    df["rebound_c_rec_index_100"] = derived_index
+    df["c_rec_index_observed"] = np.where(
+        df["c_rec_eligible"],
+        derived_index,
+        np.nan,
+    )
     return df
 
 
@@ -553,10 +884,34 @@ def build_rebound_outputs(
         extra_counts={"c_rec_eligible_count": "c_rec_eligible", "c_rec_warmup_count": "c_rec_warmup"},
     )
 
+    index_diagnostic_columns = [
+        "model",
+        "episode_id",
+        "perturbation_type",
+        "perturbation_seed",
+        "perturbation_intensity",
+        "rebound_c_rec",
+        "rebound_c_rec_index_100",
+        "rebound_c_rec_index_100_artifact",
+        "rebound_c_rec_index_100_artifact_present",
+        "rebound_c_rec_index_100_artifact_valid",
+        "rebound_c_rec_index_100_artifact_matches_raw",
+        "rebound_c_rec_index_100_artifact_abs_error",
+        "rebound_c_rec_index_100_artifact_status",
+    ]
+    index_diagnostics = rebound[
+        [column for column in index_diagnostic_columns if column in rebound.columns]
+    ]
+
     formal_summary.to_csv(tables_dir / "expq1_rebound_formal_cost.csv", index=False, encoding="utf-8-sig")
     warmup_summary.to_csv(tables_dir / "expq1_rebound_warmup_diagnostics.csv", index=False, encoding="utf-8-sig")
     outcome_context.to_csv(tables_dir / "expq1_task_outcome_context.csv", index=False, encoding="utf-8-sig")
     formal.to_csv(tables_dir / "expq1_rebound_formal_rows.csv", index=False, encoding="utf-8-sig")
+    index_diagnostics.to_csv(
+        tables_dir / "expq1_rebound_index_diagnostics.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
     return rebound, formal, formal_summary, warmup_summary
 
 
@@ -594,12 +949,22 @@ def build_ge_outputs(
         summary = summarize_metric_group(
             ge_rows,
             ["model", "phase_label", "perturbation_type", "perturbation_seed", "stress_lambda"],
-            ["task_percent_complete", "task_state_success", "ge_contract_margin_min", "ge_audc_f"],
+            ["task_percent_complete", "task_state_success", "ge_margin_soft", "ge_audc_f"],
             rng,
             bootstrap_iters,
         )
         diag_df = pd.DataFrame(diagnostics)
-        keep = ["model", "formal_ge_estimable", "incomplete_reason", "episode_metrics_files", "partial_rows"]
+        keep = [
+            "model",
+            "formal_ge_estimable",
+            "incomplete_reason",
+            "episode_metrics_files",
+            "partial_rows",
+            "required_stress_lambdas",
+            "missing_stress_lambdas",
+            "stress_grid_complete",
+            "stress_lambda_coverage",
+        ]
         summary = summary.merge(diag_df[keep], on="model", how="left")
     summary.to_csv(tables_dir / "expq1_ge_partial_reconstruction.csv", index=False, encoding="utf-8-sig")
     pd.DataFrame(diagnostics).to_csv(tables_dir / "expq1_ge_diagnostics.csv", index=False, encoding="utf-8-sig")
@@ -613,6 +978,7 @@ def build_stat_tests(
     tables_dir: Path,
 ) -> pd.DataFrame:
     rows: List[Dict[str, Any]] = []
+    formal_rebound = _materialize_pairing_intensity(formal_rebound)
     if len(model_order) >= 2 and not formal_rebound.empty:
         model_a, model_b = model_order[0], model_order[1]
         for perturbation in sorted(formal_rebound["perturbation_type"].dropna().astype(str).unique()):
@@ -631,8 +997,9 @@ def build_stat_tests(
                         group_a=model_a,
                         group_b=model_b,
                         metric=metric,
-                        pair_cols=["episode_id", "perturbation_seed"],
+                        pair_cols=REBOUND_PAIR_COLUMNS,
                         context=f"rebound_model_comparison/{perturbation}",
+                        require_paired=True,
                     )
                 )
         for model in model_order:
@@ -647,14 +1014,15 @@ def build_stat_tests(
                             group_a="surface_rewrite",
                             group_b="object_state_toggle",
                             metric=metric,
-                            pair_cols=["episode_id", "perturbation_seed"],
+                            pair_cols=REBOUND_PAIR_COLUMNS,
                             context=f"rebound_perturbation_comparison/{model}",
+                            require_paired=True,
                         )
                     )
 
     if len(model_order) >= 2 and not beta.empty:
         model_a, model_b = model_order[0], model_order[1]
-        for metric in ["beta_hat", "beta_vv", "beta_out"]:
+        for metric in ["beta_hat", "beta_trajectory", "beta_out"]:
             rows.append(
                 paired_or_unpaired_test(
                     beta,
@@ -705,7 +1073,7 @@ def plot_rebound_cost(formal: pd.DataFrame, formal_summary: pd.DataFrame, images
     sns.boxplot(
         data=formal,
         x="perturbation_type",
-        y="c_rec_observed",
+        y="c_rec_index_observed",
         hue="model",
         ax=axes[0],
         palette=["#2A9D8F", "#E76F51"],
@@ -714,7 +1082,7 @@ def plot_rebound_cost(formal: pd.DataFrame, formal_summary: pd.DataFrame, images
     sns.stripplot(
         data=formal,
         x="perturbation_type",
-        y="c_rec_observed",
+        y="c_rec_index_observed",
         hue="model",
         ax=axes[0],
         palette=["#1B6F66", "#A94732"],
@@ -723,9 +1091,10 @@ def plot_rebound_cost(formal: pd.DataFrame, formal_summary: pd.DataFrame, images
         alpha=0.45,
         legend=False,
     )
-    axes[0].set_title("Formal recovery cost after baseline is loaded")
+    axes[0].set_title("Bounded recovery-cost index after baseline is loaded")
     axes[0].set_xlabel("Perturbation")
-    axes[0].set_ylabel("C_rec (formal recovery cost)")
+    axes[0].set_ylabel("C_rec,index100 (lower is better)")
+    axes[0].set_ylim(0.0, 100.0)
     handles, labels = axes[0].get_legend_handles_labels()
     axes[0].legend(handles[:2], labels[:2], title="Model", loc="upper left")
 
@@ -771,10 +1140,16 @@ def plot_stability(beta: pd.DataFrame, images_dir: Path) -> None:
     axes[0].set_ylabel("beta_hat (action-output divergence)")
     axes[0].tick_params(axis="x", rotation=20)
 
-    comp = beta.groupby("model")[["beta_vv", "beta_out"]].mean().reset_index()
+    comp = beta.groupby("model")[["beta_trajectory", "beta_out"]].mean().reset_index()
     x = np.arange(len(comp))
     width = 0.36
-    axes[1].bar(x - width / 2, comp["beta_vv"], width, label="beta_vv", color="#2A9D8F")
+    axes[1].bar(
+        x - width / 2,
+        comp["beta_trajectory"],
+        width,
+        label="beta_trajectory",
+        color="#2A9D8F",
+    )
     axes[1].bar(x + width / 2, comp["beta_out"], width, label="beta_out", color="#E76F51")
     axes[1].set_xticks(x, comp["model"], rotation=20, ha="right")
     axes[1].set_title("Beta decomposition")
@@ -885,7 +1260,7 @@ def plot_logic_panel(
         "Missing: stress sweep + margin/AUDC aggregation"
     )
     axes[2].text(0.5, 0.5, text, ha="center", va="center", fontsize=10)
-    axes[2].set_title("GE: contract margin/AUDC")
+    axes[2].set_title("GE: stress boundary/capacity")
 
     fig.suptitle("Exp-Q1 metric-validity evidence across three resilience dimensions", y=1.03)
     fig.tight_layout()
@@ -948,22 +1323,22 @@ def write_report(
     tests: pd.DataFrame,
 ) -> None:
     lines: List[str] = []
-    lines.append("# Exp-Q1 Resilience Metrics 结果分析")
+    lines.append("# Exp-Q1 Resilience Metrics Analysis")
     lines.append("")
-    lines.append("## 输入与产物")
+    lines.append("## Inputs and Outputs")
     lines.append("")
     for spec in specs:
         lines.append(f"- `{spec.model}`: `{spec.root}`")
-    lines.append(f"- 输出目录: `{output_dir}`")
-    lines.append("- 图片目录: `Analysis/images/`")
+    lines.append(f"- Output directory: `{output_dir}`")
+    lines.append("- Figure directory: `Analysis/images/`")
     lines.append("")
 
-    lines.append("## 关键结论")
+    lines.append("## Key Findings")
     lines.append("")
     if formal_summary.empty:
-        lines.append("- Rebound: 当前没有任何 `baseline_loaded=1` 的 formal C_rec 行，因此只能做 raw window 诊断，不能声明恢复代价结论。")
+        lines.append("- Rebound: No formal C_rec rows with `baseline_loaded=1` are available. Only raw-window diagnostics are supported, so no recovery-cost conclusion can be drawn.")
     else:
-        lines.append("- Rebound: 已检测到 formal C_rec。分析时已排除 `baseline_loaded=0` 的 warm-up 行，避免把首轮无 StageBaseline 的 `c_rec=0` 当作真实恢复成本。")
+        lines.append("- Rebound: Formal C_rec rows are available. Rows with `baseline_loaded=0` are excluded as warm-up so the initial `c_rec=0` without a StageBaseline is not treated as an observed recovery cost.")
         for model in formal_summary["model"].dropna().astype(str).unique():
             parts = []
             for perturbation in ["surface_rewrite", "object_state_toggle", "filler_injection"]:
@@ -975,12 +1350,12 @@ def write_report(
                 lines.append(f"  - {model}: " + "; ".join(parts))
     if not warmup_summary.empty:
         warmup_n = int(warmup_summary["n_rows"].sum())
-        lines.append(f"- Rebound warm-up: 共 {warmup_n} 行因 `baseline_loaded=0` 被标为不可测；这些行仍可用于 raw tracker window 诊断，但不进入 formal C_rec 均值。")
+        lines.append(f"- Rebound warm-up: {warmup_n} rows with `baseline_loaded=0` are marked unmeasurable. They remain available for raw tracker-window diagnostics but are excluded from the formal mean C_rec.")
 
     if stability_summary.empty:
-        lines.append("- Stability: 未找到 anchor-level `resilience_beta.csv`，不能形成正式 β-stability 统计。")
+        lines.append("- Stability: No anchor-level `statistics/stability_beta_neighborhood.csv` is available, so formal beta-stability statistics cannot be computed.")
     else:
-        lines.append("- Stability: β 统计使用 anchor-level `resilience_beta.csv`，避免 raw rollout 重复行放大样本量。")
+        lines.append("- Stability: Beta statistics use anchor-level `statistics/stability_beta_neighborhood.csv` to avoid inflating the sample size with duplicate raw-rollout rows.")
         for _, row in stability_summary.iterrows():
             lines.append(
                 f"  - {row['model']}: beta_hat mean={fmt(row.get('beta_hat_mean'))}, "
@@ -989,38 +1364,39 @@ def write_report(
 
     incomplete = [diag for diag in diagnostics if not diag.get("formal_ge_estimable")]
     if incomplete:
-        lines.append("- Graceful Extensibility: 当前 GE block 只能 partial reconstruction，不能作为正式 contract margin/AUDC 结论。")
+        lines.append("- Graceful Extensibility: The current GE block supports only partial reconstruction and cannot support a formal stress-boundary capacity conclusion.")
         for diag in incomplete:
             lines.append(
                 f"  - {diag.get('model')}: rows={diag.get('partial_rows')}, "
                 f"phases={diag.get('phases')}, reason={diag.get('incomplete_reason')}"
             )
     else:
-        lines.append("- Graceful Extensibility: GE stress sweep 与 margin/AUDC 聚合完整，可以进入正式 GE 统计。")
+        lines.append("- Graceful Extensibility: The GE stress sweep and margin/AUDC aggregation are complete and can support formal GE statistics.")
     lines.append("")
 
-    lines.append("## 指标有效度解释")
+    lines.append("## Metric Interpretation")
     lines.append("")
-    lines.append("- Rebound 有效度: `C_rec` 捕捉任务扰动后的恢复代价，尤其是认知恢复成本；它不是 success 的替代，而是解释“成功/接近成功背后的额外代价”。")
-    lines.append("- Stability 有效度: `beta_hat` 衡量语义扰动邻域中的动作输出差异，与任务完成率不同，能揭示 planner 对输入表述的敏感性。")
-    lines.append("- GE 有效度: 理论上应由 contract margin 与 AUDC 说明系统可承受额外压力的余量；但本轮缺少完整 stress sweep，因此只能说明执行缺口，不能证明 GE 主张。")
+    lines.append("- Rebound interpretation: `C_rec` summarizes recovery cost after task perturbation, including cognitive recovery cost. It complements success by quantifying extra cost behind successful or near-successful outcomes.")
+    lines.append("- Stability interpretation: `beta_hat` summarizes action-output differences across semantically perturbed inputs, providing a view of planner sensitivity distinct from task success.")
+    lines.append("- GE interpretation: Judge-calibrated boundaries and stress curves summarize remaining stress capacity. Incomplete stress sweeps identify execution gaps and do not support formal GE claims.")
     lines.append("")
 
-    lines.append("## 统计检验")
+    lines.append("## Statistical Tests")
     lines.append("")
     if tests.empty:
-        lines.append("- 没有足够成对样本进行统计检验。")
+        lines.append("- Insufficient paired samples are available for statistical testing.")
     else:
         display = tests[["context", "metric", "group_a", "group_b", "test_name", "n_pairs", "n_a", "n_b", "p_value", "effect_size_cliffs_delta"]].head(12)
         lines.append(dataframe_to_markdown(display))
         lines.append("")
-        lines.append("完整检验结果见 `Analysis/tables/expq1_stat_tests.csv`。")
+        lines.append("Full test results are in `Analysis/tables/expq1_stat_tests.csv`.")
     lines.append("")
 
-    lines.append("## 生成文件")
+    lines.append("## Generated Files")
     lines.append("")
     lines.append("- `tables/expq1_rebound_formal_cost.csv`")
     lines.append("- `tables/expq1_rebound_warmup_diagnostics.csv`")
+    lines.append("- `tables/expq1_rebound_index_diagnostics.csv`")
     lines.append("- `tables/expq1_stability_beta.csv`")
     lines.append("- `tables/expq1_ge_partial_reconstruction.csv`")
     lines.append("- `tables/expq1_stat_tests.csv`")

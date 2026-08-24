@@ -26,7 +26,7 @@ evaluation:
   adca:
     enabled: true
     llm_model: "gpt-4o"
-    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
     adca_alpha: 1.0
     adca_fix_base: 0.2
     adca_orm_distribution: "last_step"
@@ -69,7 +69,7 @@ evaluation:
     cache_size: 1000
     
     # Custom API Configuration
-    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
     
     # Analysis & Checkpoints
     save_analyses: true

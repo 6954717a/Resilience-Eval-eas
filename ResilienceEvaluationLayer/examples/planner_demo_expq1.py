@@ -5,7 +5,7 @@
 Exp-Q1 validates the three metric dimensions rather than testing an
 optimization: Rebound cost, Stability neighborhood sensitivity, and GE
 stress-response capacity. GE postprocess outputs are written under each
-condition analysis directory, with a root-level ``capacity_summary.csv`` for
+condition analysis directory, with a root-level ``boundary_capacity_summary.csv`` for
 paper-facing analysis.
 """
 

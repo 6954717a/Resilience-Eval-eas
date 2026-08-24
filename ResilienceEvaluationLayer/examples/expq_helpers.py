@@ -6,9 +6,9 @@ Shared orchestration helpers for the Exp-Q1 / Q2 / Q3 experiment runners.
 from __future__ import annotations
 
 from collections import defaultdict
-import csv
 import gc
 import logging
+import math
 from pathlib import Path
 import subprocess
 from typing import Any, Dict, List, Mapping, Optional, Sequence
@@ -23,72 +23,65 @@ from habitat_llm.examples.planner_demo_resilience import (
 from habitat_llm.examples.resilience_helpers import (
     extract_resilience_cfg,
     normalize_rollout_rows,
-    run_margin_aggregation,
+    run_boundary_aggregation,
     run_stability_aggregation,
     write_csv_rows,
     write_json,
+)
+from habitat_llm.evaluation.reporting import (
+    POSTPROCESS_METRIC_KEYS,
+    RUNTIME_METRIC_KEYS,
+    read_csv_rows,
 )
 
 DEFAULT_SUMMARY_METRICS: List[str] = [
     "task_percent_complete",
     "task_state_success",
     "proposition_satisfied_fraction",
-    "rebound_c_rec",
-    "rebound_c_rec_cog",
-    "rebound_c_rec_phy",
-    "rebound_c_rec_state_debt",
-    "rebound_c_rec_plan",
-    "rebound_c_rec_sim",
-    "rebound_num_recovery_windows",
-    "rebound_raw_window_count",
-    "rebound_formal_window_count",
-    "rebound_skipped_window_count",
-    "rebound_c_rec_valid",
-    "rebound_w_rem_star",
-    "rebound_g_rec_total",
-    "stability_beta",
-    "stability_beta_neighborhood",
-    "stability_beta_vv",
-    "stability_beta_out",
-    "stability_beta_oscillation",
-    "stability_beta_action",
-    "stability_beta_progress",
-    "stability_beta_success",
-    "stability_beta_perturbation",
-    "stability_beta_perturbation_vv",
-    "stability_beta_perturbation_out",
-    "stability_beta_perturbation_oscillation",
-    "stability_beta_perturbation_action",
-    "stability_beta_perturbation_progress",
-    "stability_beta_perturbation_success",
-    "stability_beta_perturbation_valid",
-    "stability_beta_neighborhood_valid",
-    "stability_p_cbf",
-    "stability_td_error_mean_abs",
-    "stability_td_error_p95_abs",
-    "stability_gae_mean_abs",
-    "stability_gae_p95_abs",
-    "stability_return_target_variance",
-    "stability_oscillation_loss",
-    "stability_oscillation_loss_valid",
-    "stability_value_delta_variance",
-    "ge_contract_margin_min",
-    "ge_margin_soft",
-    "ge_margin_hard",
-    "ge_cpsc_lambda_star",
-    "ge_hard_lambda_star",
-    "ge_audc_f",
-    "ge_audc_norm_f",
-    "ge_cell_valid",
-    "ge_valid_lambda_coverage",
-    "ge_degradation_rate",
-    "ge_max_degradation_rate",
-    "ge_margin_drop_f",
-    "ge_monotonicity_violations",
-    "ge_cliff_flag",
-    "ge_boundary_hit",
-    "ge_hard_boundary_hit",
+    "sim_step_count",
+    "replanning_count_0",
+    "replanning_count_1",
+    *RUNTIME_METRIC_KEYS,
+    *POSTPROCESS_METRIC_KEYS,
 ]
+
+EMPTY_ROLLOUT_FIELDS = tuple(
+    dict.fromkeys(
+        (
+            "episode_id",
+            "anchor_id",
+            "perturbation_type",
+            "perturbation_seed",
+            "perturbation_intensity",
+            "perturbation_stress_family",
+            "perturbation_level_index",
+            "perturbation_variant",
+            "perturbation_complete_unit_count",
+            "perturbation_stress_realized",
+            "perturbation_text_dose",
+            "perturbation_alignment_valid",
+            "perturbation_bank_path",
+            "canonical_instruction",
+            "policy_instruction",
+            "run_seed",
+            "suite_name",
+            "subexperiment_name",
+            "condition_name",
+            "condition_label",
+            "phase_label",
+            "judge_model",
+            *RUNTIME_METRIC_KEYS,
+            *POSTPROCESS_METRIC_KEYS,
+        )
+    )
+)
+
+DEFAULT_JUDGE_PAIR_KEYS = (
+    "episode_id",
+    "perturbation_seed",
+    "perturbation_type",
+    "perturbation_intensity",
+)
 
 
 def _materialize(node: Any) -> Any:
@@ -163,20 +156,21 @@ def _git_revision() -> str:
 def _read_csv_rows(path: Path) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
-    with open(path, "r", encoding="utf-8", newline="") as handle:
-        return [dict(row) for row in csv.DictReader(handle)]
+    return list(read_csv_rows(path))
 
 
 def _ge_analysis_outputs(analysis_dir: Path) -> Dict[str, str]:
     candidates = {
-        "margin_episode_contracts_csv": analysis_dir / "resilience_margin_episode_contracts.csv",
-        "margin_episode_diagnostics_csv": analysis_dir / "resilience_margin_episode_diagnostics.csv",
-        "margin_invalid_rows_csv": analysis_dir / "resilience_margin_invalid_rows.csv",
-        "margin_cells_csv": analysis_dir / "resilience_margin_cells.csv",
-        "margin_cell_diagnostics_csv": analysis_dir / "resilience_margin_cell_diagnostics.csv",
-        "margin_capacity_csv": analysis_dir / "resilience_margin_capacity.csv",
-        "margin_capacity_diagnostics_csv": analysis_dir / "resilience_margin_capacity_diagnostics.csv",
-        "margin_audc_csv": analysis_dir / "resilience_margin_audc.csv",
+        "boundary_episode_summary_csv": analysis_dir / "diagnostics" / "ge_boundary_episode_summary.csv",
+        "boundary_episode_diagnostics_csv": analysis_dir / "diagnostics" / "ge_boundary_episode_diagnostics.csv",
+        "boundary_invalid_rows_csv": analysis_dir / "diagnostics" / "ge_boundary_invalid_rows.csv",
+        "boundary_cells_csv": analysis_dir / "statistics" / "ge_boundary_cells.csv",
+        "boundary_cell_diagnostics_csv": analysis_dir / "diagnostics" / "ge_boundary_cell_diagnostics.csv",
+        "boundary_capacity_csv": analysis_dir / "resilience_boundary_capacity.csv",
+        "boundary_capacity_diagnostics_csv": analysis_dir / "diagnostics" / "ge_boundary_capacity_diagnostics.csv",
+        "boundary_curve_statistics_csv": analysis_dir / "statistics" / "ge_boundary_curve_statistics.csv",
+        "boundary_reference_statistics_csv": analysis_dir / "statistics" / "ge_boundary_reference_statistics.csv",
+        "boundary_baseline_json": analysis_dir / "statistics" / "ge_boundary_baseline.json",
     }
     return {key: str(path) for key, path in candidates.items() if path.exists()}
 
@@ -225,6 +219,311 @@ def summarize_rollouts(
             summary[f"{metric_key}_max"] = max(values)
         summaries.append(summary)
     return summaries
+
+
+def build_configured_summary_comparison(
+    summary_rows: Sequence[Mapping[str, Any]],
+    comparison_cfg: Mapping[str, Any],
+) -> List[Dict[str, Any]]:
+    """Build aligned candidate-minus-reference deltas from summary rows."""
+    group_key = str(comparison_cfg.get("group_key") or "").strip()
+    reference = str(comparison_cfg.get("reference") or "").strip()
+    candidate = str(comparison_cfg.get("candidate") or "").strip()
+    match_keys = [str(key) for key in _as_list(comparison_cfg.get("match_keys"))]
+    metrics = [str(key) for key in _as_list(comparison_cfg.get("metrics"))]
+    statistic = str(comparison_cfg.get("statistic") or "mean").strip()
+    if not group_key or not reference or not candidate or not metrics:
+        return []
+
+    def _match_key(row: Mapping[str, Any]) -> tuple:
+        return tuple(str(row.get(key, "")) for key in match_keys)
+
+    reference_rows = {
+        _match_key(row): row
+        for row in summary_rows
+        if str(row.get(group_key, "")) == reference
+    }
+    candidate_rows = {
+        _match_key(row): row
+        for row in summary_rows
+        if str(row.get(group_key, "")) == candidate
+    }
+    comparisons: List[Dict[str, Any]] = []
+    for key in sorted(set(reference_rows) & set(candidate_rows)):
+        reference_row = reference_rows[key]
+        candidate_row = candidate_rows[key]
+        record: Dict[str, Any] = {
+            group_key + "_reference": reference,
+            group_key + "_candidate": candidate,
+        }
+        for match_key, value in zip(match_keys, key):
+            record[match_key] = value
+        metric_count = 0
+        for metric in metrics:
+            summary_key = f"{metric}_{statistic}"
+            reference_value = _maybe_float(reference_row.get(summary_key))
+            candidate_value = _maybe_float(candidate_row.get(summary_key))
+            if reference_value is None or candidate_value is None:
+                continue
+            delta = candidate_value - reference_value
+            record[f"{metric}_reference"] = reference_value
+            record[f"{metric}_candidate"] = candidate_value
+            record[f"{metric}_delta_candidate_minus_reference"] = delta
+            record[f"{metric}_relative_delta"] = (
+                delta / abs(reference_value) if abs(reference_value) > 1.0e-12 else ""
+            )
+            metric_count += 1
+        if metric_count:
+            comparisons.append(record)
+    return comparisons
+
+
+def build_paired_rollout_comparison(
+    rollout_rows: Sequence[Mapping[str, Any]],
+    comparison_cfg: Mapping[str, Any],
+) -> List[Dict[str, Any]]:
+    """Compare Judge conditions on aligned episode-level rollout cells.
+
+    Unlike summary-level subtraction, this preserves the experimental pairing
+    unit and emits reference-only/candidate-only cells so missing workers are
+    visible in the comparison artifact rather than silently changing a family
+    mean.
+    """
+
+    group_key = str(comparison_cfg.get("group_key") or "").strip()
+    reference = str(comparison_cfg.get("reference") or "").strip()
+    candidate = str(comparison_cfg.get("candidate") or "").strip()
+    metrics = [str(key) for key in _as_list(comparison_cfg.get("metrics"))]
+    pair_keys = [
+        str(key)
+        for key in (
+            _as_list(comparison_cfg.get("pair_keys"))
+            or DEFAULT_JUDGE_PAIR_KEYS
+        )
+    ]
+    if not group_key or not reference or not candidate or not metrics:
+        return []
+    if tuple(pair_keys) != DEFAULT_JUDGE_PAIR_KEYS:
+        raise ValueError(
+            "Judge rollout comparison requires the exact pairing keys "
+            f"{list(DEFAULT_JUDGE_PAIR_KEYS)}; received {pair_keys}"
+        )
+
+    def _pair_key(
+        row: Mapping[str, Any],
+    ) -> tuple[Optional[tuple], List[str]]:
+        values: List[str] = []
+        missing: List[str] = []
+        for key in pair_keys:
+            raw = row.get(key)
+            text = "" if raw is None else str(raw).strip()
+            if not text:
+                missing.append(key)
+                values.append("")
+                continue
+            if key == "perturbation_seed":
+                try:
+                    numeric = float(raw)
+                    if not math.isfinite(numeric) or not numeric.is_integer():
+                        raise ValueError
+                    text = str(int(numeric))
+                except (TypeError, ValueError):
+                    missing.append(key)
+                    text = ""
+            elif key == "perturbation_intensity":
+                try:
+                    numeric = float(raw)
+                    if not math.isfinite(numeric):
+                        raise ValueError
+                    text = format(numeric, ".17g")
+                except (TypeError, ValueError):
+                    missing.append(key)
+                    text = ""
+            values.append(text)
+        return (tuple(values) if not missing else None), missing
+
+    def _index(
+        condition: str,
+    ) -> tuple[
+        Dict[tuple, List[Mapping[str, Any]]],
+        List[tuple[Mapping[str, Any], List[str]]],
+    ]:
+        indexed: Dict[tuple, List[Mapping[str, Any]]] = defaultdict(list)
+        invalid: List[tuple[Mapping[str, Any], List[str]]] = []
+        for row in rollout_rows:
+            if str(row.get(group_key, "")) == condition:
+                key, missing = _pair_key(row)
+                if key is None:
+                    invalid.append((row, missing))
+                else:
+                    indexed[key].append(row)
+        return indexed, invalid
+
+    reference_rows, reference_invalid_rows = _index(reference)
+    candidate_rows, candidate_invalid_rows = _index(candidate)
+    reference_keys = set(reference_rows)
+    candidate_keys = set(candidate_rows)
+    union_keys = reference_keys | candidate_keys
+    paired_keys = {
+        key
+        for key in reference_keys & candidate_keys
+        if len(reference_rows[key]) == 1 and len(candidate_rows[key]) == 1
+    }
+    reference_duplicate_keys = {
+        key for key, bucket in reference_rows.items() if len(bucket) != 1
+    }
+    candidate_duplicate_keys = {
+        key for key, bucket in candidate_rows.items() if len(bucket) != 1
+    }
+
+    reference_count = len(reference_keys)
+    candidate_count = len(candidate_keys)
+    union_count = len(union_keys)
+    paired_count = len(paired_keys)
+    coverage_fields = {
+        "reference_pair_count": reference_count,
+        "candidate_pair_count": candidate_count,
+        "paired_pair_count": paired_count,
+        "reference_only_pair_count": len(reference_keys - candidate_keys),
+        "candidate_only_pair_count": len(candidate_keys - reference_keys),
+        "pair_union_count": union_count,
+        "reference_invalid_pair_key_row_count": len(reference_invalid_rows),
+        "candidate_invalid_pair_key_row_count": len(candidate_invalid_rows),
+        "reference_duplicate_pair_key_count": len(reference_duplicate_keys),
+        "candidate_duplicate_pair_key_count": len(candidate_duplicate_keys),
+        "pair_coverage_reference": (
+            paired_count / reference_count if reference_count else 0.0
+        ),
+        "pair_coverage_candidate": (
+            paired_count / candidate_count if candidate_count else 0.0
+        ),
+        "pair_coverage_union": (
+            paired_count / union_count if union_count else 0.0
+        ),
+    }
+
+    comparisons: List[Dict[str, Any]] = []
+    for key in sorted(union_keys):
+        reference_bucket = reference_rows.get(key, [])
+        candidate_bucket = candidate_rows.get(key, [])
+        duplicate_reference = len(reference_bucket) > 1
+        duplicate_candidate = len(candidate_bucket) > 1
+        if duplicate_reference or duplicate_candidate:
+            pairing_status = "duplicate_pair_key"
+        elif reference_bucket and candidate_bucket:
+            pairing_status = "paired"
+        elif reference_bucket:
+            pairing_status = "reference_only"
+        else:
+            pairing_status = "candidate_only"
+
+        record: Dict[str, Any] = {
+            group_key + "_reference": reference,
+            group_key + "_candidate": candidate,
+            "pairing_status": pairing_status,
+            "reference_rows_in_pair": len(reference_bucket),
+            "candidate_rows_in_pair": len(candidate_bucket),
+            "pair_key_valid": True,
+            "pair_key_unique": not (
+                duplicate_reference or duplicate_candidate
+            ),
+            "missing_pair_keys": "",
+            **coverage_fields,
+        }
+        for pair_key, value in zip(pair_keys, key):
+            record[pair_key] = value
+
+        reference_family = (
+            str(reference_bucket[0].get("task_family", ""))
+            if reference_bucket
+            else ""
+        )
+        candidate_family = (
+            str(candidate_bucket[0].get("task_family", ""))
+            if candidate_bucket
+            else ""
+        )
+        record["task_family_reference"] = reference_family
+        record["task_family_candidate"] = candidate_family
+        record["task_family_match"] = bool(
+            reference_family
+            and candidate_family
+            and reference_family == candidate_family
+        )
+
+        paired_metric_count = 0
+        for metric in metrics:
+            reference_value = (
+                _maybe_float(reference_bucket[0].get(metric))
+                if len(reference_bucket) == 1
+                else None
+            )
+            candidate_value = (
+                _maybe_float(candidate_bucket[0].get(metric))
+                if len(candidate_bucket) == 1
+                else None
+            )
+            record[f"{metric}_reference"] = (
+                "" if reference_value is None else reference_value
+            )
+            record[f"{metric}_candidate"] = (
+                "" if candidate_value is None else candidate_value
+            )
+            if reference_value is None or candidate_value is None:
+                record[f"{metric}_delta_candidate_minus_reference"] = ""
+                record[f"{metric}_relative_delta"] = ""
+                continue
+            delta = candidate_value - reference_value
+            record[f"{metric}_delta_candidate_minus_reference"] = delta
+            record[f"{metric}_relative_delta"] = (
+                delta / abs(reference_value)
+                if abs(reference_value) > 1.0e-12
+                else ""
+            )
+            paired_metric_count += 1
+        record["paired_metric_count"] = paired_metric_count
+        comparisons.append(record)
+
+    for side, invalid_rows in (
+        ("reference", reference_invalid_rows),
+        ("candidate", candidate_invalid_rows),
+    ):
+        for row, missing in invalid_rows:
+            record = {
+                group_key + "_reference": reference,
+                group_key + "_candidate": candidate,
+                "pairing_status": f"{side}_invalid_pair_key",
+                "reference_rows_in_pair": int(side == "reference"),
+                "candidate_rows_in_pair": int(side == "candidate"),
+                "pair_key_valid": False,
+                "pair_key_unique": False,
+                "missing_pair_keys": ",".join(missing),
+                **coverage_fields,
+            }
+            for pair_key in pair_keys:
+                raw = row.get(pair_key)
+                record[pair_key] = "" if raw is None else str(raw).strip()
+            family = str(row.get("task_family", ""))
+            record["task_family_reference"] = (
+                family if side == "reference" else ""
+            )
+            record["task_family_candidate"] = (
+                family if side == "candidate" else ""
+            )
+            record["task_family_match"] = False
+            for metric in metrics:
+                value = _maybe_float(row.get(metric))
+                record[f"{metric}_reference"] = (
+                    value if side == "reference" and value is not None else ""
+                )
+                record[f"{metric}_candidate"] = (
+                    value if side == "candidate" and value is not None else ""
+                )
+                record[f"{metric}_delta_candidate_minus_reference"] = ""
+                record[f"{metric}_relative_delta"] = ""
+            record["paired_metric_count"] = 0
+            comparisons.append(record)
+    return comparisons
 
 
 def _build_condition_list(block_cfg: Mapping[str, Any]) -> List[Dict[str, Any]]:
@@ -302,6 +601,13 @@ def _run_condition(
             ),
         )
         resilience_cfg = extract_resilience_cfg(merged_cfg, DEFAULT_RESILIENCE_CFG)
+        stage_baseline_cfg = resilience_cfg.get("stage_baseline", {}) or {}
+        judge_model = str(
+            stage_baseline_cfg.get("judge_model")
+            or OmegaConf.select(merged_cfg, "evaluation.critic.llm_model")
+            or OmegaConf.select(merged_cfg, "evaluation.adca.llm_model")
+            or "unconfigured-judge"
+        )
         result = run_resilience_experiment(
             merged_cfg,
             resilience_cfg=resilience_cfg,
@@ -329,6 +635,7 @@ def _run_condition(
             row["condition_name"] = condition_name
             row["condition_label"] = condition_label
             row["phase_label"] = phase_label
+            row["judge_model"] = judge_model
         combined_rows.extend(phase_rows)
         del phase_rows
         phase_runs.append(phase_run_meta)
@@ -356,10 +663,20 @@ def _run_condition(
     postprocess = [str(mode) for mode in _as_list(block_cfg.get("postprocess"))]
     analysis_dir = condition_dir / "analysis"
     analysis_dir.mkdir(parents=True, exist_ok=True)
-    if "stability" in postprocess:
-        run_stability_aggregation(combined_rows, analysis_dir, resilience_cfg)
-    if "margin" in postprocess:
-        run_margin_aggregation(
+    if "stability" in postprocess and combined_rows:
+        run_stability_aggregation(
+            combined_rows,
+            analysis_dir,
+            resilience_cfg,
+            baseline_path=(
+                baseline_path
+                if baseline_path is not None and baseline_path.exists()
+                else None
+            ),
+            dataset_path=str(dataset_path) if dataset_path else None,
+        )
+    if "margin" in postprocess and combined_rows:
+        run_boundary_aggregation(
             combined_rows,
             analysis_dir,
             resilience_cfg,
@@ -368,6 +685,7 @@ def _run_condition(
     condition_raw_path = write_csv_rows(
         analysis_dir / "raw_rollouts.csv",
         combined_rows,
+        empty_fieldnames=EMPTY_ROLLOUT_FIELDS,
     )
     ge_outputs = _ge_analysis_outputs(analysis_dir)
 
@@ -403,22 +721,22 @@ def _write_ge_capacity_summary(
         analysis_dir = Path(str(condition_run.get("analysis_dir", "")))
         condition_name = str(condition_run.get("condition_name", ""))
         condition_label = str(condition_run.get("condition_label", ""))
-        for row in _read_csv_rows(analysis_dir / "resilience_margin_capacity.csv"):
+        for row in _read_csv_rows(analysis_dir / "resilience_boundary_capacity.csv"):
             row["condition_name"] = condition_name
             row["condition_label"] = condition_label
             capacity_rows.append(row)
-        for row in _read_csv_rows(analysis_dir / "resilience_margin_cells.csv"):
+        for row in _read_csv_rows(analysis_dir / "statistics" / "ge_boundary_cells.csv"):
             row["condition_name"] = condition_name
             row["condition_label"] = condition_label
             cell_rows.append(row)
 
     outputs: Dict[str, str] = {}
     if capacity_rows:
-        path = write_csv_rows(subexperiment_dir / "capacity_summary.csv", capacity_rows)
-        outputs["capacity_summary_csv"] = str(path)
+        path = write_csv_rows(subexperiment_dir / "boundary_capacity_summary.csv", capacity_rows)
+        outputs["boundary_capacity_summary_csv"] = str(path)
     if cell_rows:
-        path = write_csv_rows(subexperiment_dir / "margin_cells_summary.csv", cell_rows)
-        outputs["margin_cells_summary_csv"] = str(path)
+        path = write_csv_rows(subexperiment_dir / "boundary_cells_summary.csv", cell_rows)
+        outputs["boundary_cells_summary_csv"] = str(path)
     return outputs
 
 
@@ -441,6 +759,7 @@ def _finalize_subexperiment(
     raw_rollouts_path = write_csv_rows(
         subexperiment_dir / "raw_rollouts.csv",
         all_rows,
+        empty_fieldnames=EMPTY_ROLLOUT_FIELDS,
     )
     summary_rows = summarize_rollouts(
         all_rows,
@@ -452,10 +771,35 @@ def _finalize_subexperiment(
         ],
     )
     row_count = len(all_rows)
-    del all_rows  # Release rows after summarization
-    gc.collect()
 
-    summary_path = write_csv_rows(subexperiment_dir / "summary.csv", summary_rows)
+    summary_group_keys = [
+        str(key) for key in _as_list(block_cfg.get("summary_group_keys"))
+    ]
+    summary_path = write_csv_rows(
+        subexperiment_dir / "summary.csv",
+        summary_rows,
+        empty_fieldnames=(*summary_group_keys, "n_rollouts", "n_episode_ids"),
+    )
+    comparison_cfg = _as_mapping(block_cfg.get("comparison"))
+    if str(comparison_cfg.get("group_key") or "") == "judge_model":
+        comparison_rows = build_paired_rollout_comparison(
+            all_rows,
+            comparison_cfg,
+        )
+    else:
+        comparison_rows = build_configured_summary_comparison(
+            summary_rows,
+            comparison_cfg,
+        )
+    del all_rows  # Release rows after paired comparison and summarization.
+    gc.collect()
+    comparison_path: Optional[Path] = None
+    if comparison_rows:
+        comparison_path = write_csv_rows(
+            subexperiment_dir
+            / str(comparison_cfg.get("output_filename") or "group_comparison.csv"),
+            comparison_rows,
+        )
     ge_summary_outputs = _write_ge_capacity_summary(
         subexperiment_dir,
         condition_runs,
@@ -484,6 +828,11 @@ def _finalize_subexperiment(
         "outputs": {
             "raw_rollouts_csv": str(raw_rollouts_path),
             "summary_csv": str(summary_path),
+            **(
+                {"configured_comparison_csv": str(comparison_path)}
+                if comparison_path is not None
+                else {}
+            ),
             **ge_summary_outputs,
         },
     }
@@ -494,6 +843,11 @@ def _finalize_subexperiment(
         "directory": str(subexperiment_dir),
         "raw_rollouts_csv": str(raw_rollouts_path),
         "summary_csv": str(summary_path),
+        **(
+            {"configured_comparison_csv": str(comparison_path)}
+            if comparison_path is not None
+            else {}
+        ),
         **ge_summary_outputs,
         "metadata_json": str(metadata_path),
         "row_count": row_count,

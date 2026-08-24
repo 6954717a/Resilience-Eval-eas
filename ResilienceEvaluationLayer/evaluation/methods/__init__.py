@@ -7,7 +7,7 @@ This module consolidates all implementation-specific methods (CLARE, CoPAL, Cycl
 InnoMono, SayCan, LLMEvaluator) into a unified structure.
 
 These methods provide specific implementations for planning, recovery, and evaluation,
-while the metrics/ module provides dimension-based analysis (Rebound, Stability, Degradation).
+while the metrics/ module provides Rebound, Stability, and multi-run GE analysis.
 
 Organization:
 - clare/: Continual Learning with Autonomous Routing and Expansion

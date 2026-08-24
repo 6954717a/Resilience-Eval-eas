@@ -21,6 +21,21 @@ agents:
 
 # A2C Critic Configuration
 critic:
+  phase: "evaluation"          # train | training_collect | reference | evaluation
+  state_encoder_checkpoint: ""
+  state_encoder_id: ""
+  value_checkpoint: ""
+  value_checkpoint_id: ""
+  freeze_state_encoder: true
+  update_value_network: false
+  require_component_checkpoints: false
+  reward_shaper_valid: false
+  critic_lifecycle_valid: false
+  initialization_seed: 47668090
+  lifecycle:
+    training_seeds: [100, 101, 102]
+    value_training_epochs: 20
+    value_training_batch_size: 256
   enabled: true
 
   # Core RL parameters

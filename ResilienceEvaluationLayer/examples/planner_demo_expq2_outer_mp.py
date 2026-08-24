@@ -39,7 +39,7 @@ from habitat_llm.examples.expq_helpers import (
     _git_revision,
     merge_config_patch,
     run_named_suite,
-    run_margin_aggregation,
+    run_boundary_aggregation,
     run_stability_aggregation,
     write_csv_rows,
     write_json,
@@ -330,9 +330,14 @@ def _postprocess_condition_rows(
     )
     postprocess = [str(mode) for mode in _as_list(block_cfg.get("postprocess"))]
     if "stability" in postprocess:
-        run_stability_aggregation(normalized_rows, analysis_dir, resilience_cfg)
+        run_stability_aggregation(
+            normalized_rows,
+            analysis_dir,
+            resilience_cfg,
+            dataset_path=str(dataset_path) if dataset_path else None,
+        )
     if "margin" in postprocess:
-        run_margin_aggregation(
+        run_boundary_aggregation(
             normalized_rows,
             analysis_dir,
             resilience_cfg,

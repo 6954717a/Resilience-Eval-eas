@@ -152,8 +152,8 @@ class ReboundTemplate:
 
     * :meth:`observe` — called every step with a :class:`TemplateObservation`.
       Returns zero or more :class:`ReboundEvent`.
-    * :meth:`finalize` — called at episode end; may emit a terminal ``t_r``
-      for any still-open stuck window.
+    * :meth:`finalize` — optional episode-end diagnostic hook.  It must not
+      fabricate recovery for an unresolved disruption.
     * :meth:`reset` — called before a new episode.
     """
 
@@ -218,7 +218,9 @@ class NavOscillationDetector(ReboundTemplate):
 
         # Close an open window as soon as a manipulation succeeds (Δq ≥ 0
         # and Pick/Place executed) — that is the natural recovery signal.
-        if self._open_since is not None and obs.any_manipulation and obs.delta_q >= 0:
+        if self._open_since is not None and obs.any_manipulation and (
+            obs.delta_progress > 1e-6 or obs.delta_q > 1e-6
+        ):
             events.append(
                 ReboundEvent(
                     step=obs.step,
@@ -238,6 +240,7 @@ class NavOscillationDetector(ReboundTemplate):
         # Count alternations: pairs (i, i+2) that share a primary target and
         # differ from (i+1).
         oscillations = 0
+        oscillation_starts: List[int] = []
         frames = list(self._recent)
         for i in range(len(frames) - 2):
             a, b, c = frames[i], frames[i + 1], frames[i + 2]
@@ -249,6 +252,7 @@ class NavOscillationDetector(ReboundTemplate):
                 and b.primary_arg != a.primary_arg
             ):
                 oscillations += 1
+                oscillation_starts.append(int(a.step))
         if oscillations < self.min_oscillations:
             return events
 
@@ -258,35 +262,23 @@ class NavOscillationDetector(ReboundTemplate):
             return events
 
         if self._open_since is None:
-            self._open_since = obs.step
+            onset_step = min(oscillation_starts) if oscillation_starts else obs.step
+            self._open_since = onset_step
             events.append(
                 ReboundEvent(
-                    step=obs.step,
+                    step=onset_step,
                     kind="t_d",
                     template=self.code,
                     severity=float(oscillations),
                     payload={
                         "oscillations": int(oscillations),
                         "targets": [f.primary_arg for f in frames],
+                        "detected_at": int(obs.step),
                     },
                 )
             )
             self._last_fired_step = obs.step
         return events
-
-    def finalize(self, last_step: int) -> List[ReboundEvent]:
-        if self._open_since is None:
-            return []
-        return [
-            ReboundEvent(
-                step=int(last_step),
-                kind="t_r",
-                template=self.code,
-                severity=0.5,  # lower: window never closed organically
-                payload={"opened_at": int(self._open_since), "finalized": True},
-            )
-        ]
-
 
 # ----------------------------------------------------------------------
 # R3: plan_thrashing
@@ -371,35 +363,27 @@ class PlanThrashingDetector(ReboundTemplate):
             and pos == 0
             and obs.step - self._last_fired_step >= self.cooldown
         ):
-            self._open_since = obs.step
+            onset_step = (
+                int(self._replan_steps[0])
+                if self._replan_steps
+                else int(obs.step)
+            )
+            self._open_since = onset_step
             events.append(
                 ReboundEvent(
-                    step=obs.step,
+                    step=onset_step,
                     kind="t_d",
                     template=self.code,
                     severity=float(recent),
                     payload={
                         "recent_replans": int(recent),
                         "window_size": int(self.window_size),
+                        "detected_at": int(obs.step),
                     },
                 )
             )
             self._last_fired_step = obs.step
         return events
-
-    def finalize(self, last_step: int) -> List[ReboundEvent]:
-        if self._open_since is None:
-            return []
-        return [
-            ReboundEvent(
-                step=int(last_step),
-                kind="t_r",
-                template=self.code,
-                severity=0.5,
-                payload={"opened_at": int(self._open_since), "finalized": True},
-            )
-        ]
-
 
 # ----------------------------------------------------------------------
 # T1: target_receptacle_mismatch
@@ -408,11 +392,10 @@ class TargetReceptacleMismatchDetector(ReboundTemplate):
     """Fire whenever a ``Place[obj, recept]`` does not satisfy any *open*
     placement target for that object in the episode target graph.
 
-    Unlike R1/R3 this is an instantaneous event: we emit paired ``t_d`` and
-    ``t_r`` at the same step, carrying the offending ``(obj, recept)``.
-    The ``severity`` is scaled by the number of remaining open placements
-    for that object, because placing at a wrong receptacle while *many*
-    valid targets exist is more informative than doing so near task end.
+    ``t_d`` is the mismatching placement transition.  ``t_r`` is emitted only
+    after one of the object's intended placement propositions is actually
+    satisfied.  The severity is scaled by the number of still-open intended
+    placements for that object.
     """
 
     code = "T1"
@@ -421,14 +404,39 @@ class TargetReceptacleMismatchDetector(ReboundTemplate):
         super().__init__(cooldown=cooldown)
         self.cooldown = int(cooldown)
         self._last_fired_step: int = -(10**9)
+        self._open_objects: Dict[str, Dict[str, Any]] = {}
 
     def reset(self) -> None:
         self._last_fired_step = -(10**9)
+        self._open_objects.clear()
 
     def observe(self, obs: TemplateObservation) -> List[ReboundEvent]:
         events: List[ReboundEvent] = []
         if obs.target_graph is None:
             return events
+
+        for obj, state in list(self._open_objects.items()):
+            target_props = tuple(state.get("target_propositions") or ())
+            recovered = any(
+                0 <= int(index) < len(obs.proposition_satisfied_at)
+                and int(obs.proposition_satisfied_at[int(index)]) >= 0
+                for index in target_props
+            )
+            if recovered:
+                events.append(
+                    ReboundEvent(
+                        step=obs.step,
+                        kind="t_r",
+                        template=self.code,
+                        severity=0.0,
+                        payload={
+                            "object": obj,
+                            "opened_at": int(state["opened_at"]),
+                            "cause_id": f"{self.code}:{obj}",
+                        },
+                    )
+                )
+                self._open_objects.pop(obj, None)
         if obs.step - self._last_fired_step < self.cooldown:
             return events
 
@@ -439,9 +447,20 @@ class TargetReceptacleMismatchDetector(ReboundTemplate):
             rec = frame.secondary_arg
             if obj is None or rec is None:
                 continue
-            open_placements = obs.target_graph.open_placements(obs.proposition_satisfied_at)
+            if str(obj) in self._open_objects:
+                continue
+            open_placements = tuple(
+                p
+                for p in obs.target_graph.open_placements(obs.proposition_satisfied_at)
+                if p.is_action_matchable
+            )
+            object_targets = tuple(
+                p for p in open_placements if str(obj) in p.object_ids
+            )
+            if not object_targets:
+                continue
             matches_any_open = any(
-                p.matches(obj, rec) for p in open_placements
+                p.matches(obj, rec) for p in object_targets
             )
             if matches_any_open:
                 continue
@@ -449,14 +468,18 @@ class TargetReceptacleMismatchDetector(ReboundTemplate):
             # placements for this object are still unsatisfied.
             remaining = sum(
                 1
-                for p in open_placements
+                for p in object_targets
                 if str(obj) in p.object_ids and not p.matches(obj, rec)
             )
             severity = float(remaining + 1)
             payload = {
                 "object": obj,
                 "receptacle": rec,
+                "cause_id": f"{self.code}:{obj}",
                 "open_placements_for_object": remaining,
+                "target_propositions": sorted(
+                    {int(target.proposition_index) for target in object_targets}
+                ),
             }
             events.append(
                 ReboundEvent(
@@ -468,16 +491,10 @@ class TargetReceptacleMismatchDetector(ReboundTemplate):
                     payload=payload,
                 )
             )
-            events.append(
-                ReboundEvent(
-                    step=obs.step,
-                    kind="t_r",
-                    template=self.code,
-                    severity=severity,
-                    agent_uid=frame.agent_uid,
-                    payload=payload,
-                )
-            )
+            self._open_objects[str(obj)] = {
+                "opened_at": int(obs.step),
+                "target_propositions": list(payload["target_propositions"]),
+            }
             self._last_fired_step = obs.step
         return events
 
@@ -499,14 +516,39 @@ class RequiredStateFlipOmittedDetector(ReboundTemplate):
         super().__init__(cooldown=cooldown)
         self.cooldown = int(cooldown)
         self._last_fired_step: int = -(10**9)
+        self._open_objects: Dict[str, Dict[str, Any]] = {}
 
     def reset(self) -> None:
         self._last_fired_step = -(10**9)
+        self._open_objects.clear()
 
     def observe(self, obs: TemplateObservation) -> List[ReboundEvent]:
         events: List[ReboundEvent] = []
         if obs.target_graph is None:
             return events
+
+        for obj, state in list(self._open_objects.items()):
+            flip_props = tuple(state.get("flip_propositions") or ())
+            recovered = bool(flip_props) and all(
+                0 <= int(index) < len(obs.proposition_satisfied_at)
+                and int(obs.proposition_satisfied_at[int(index)]) >= 0
+                for index in flip_props
+            )
+            if recovered:
+                events.append(
+                    ReboundEvent(
+                        step=obs.step,
+                        kind="t_r",
+                        template=self.code,
+                        severity=0.0,
+                        payload={
+                            "object": obj,
+                            "opened_at": int(state["opened_at"]),
+                            "cause_id": f"{self.code}:{obj}",
+                        },
+                    )
+                )
+                self._open_objects.pop(obj, None)
         if obs.step - self._last_fired_step < self.cooldown:
             return events
 
@@ -517,16 +559,22 @@ class RequiredStateFlipOmittedDetector(ReboundTemplate):
             obj = frame.primary_arg
             if not obj:
                 continue
+            if str(obj) in self._open_objects:
+                continue
             outstanding_flips = [
-                s for s in obs.target_graph.state_flips_for_object(str(obj))
-                if 0 <= s.proposition_index < len(psa)
-                and int(psa[s.proposition_index]) < 0
+                state_flip
+                for state_flip in obs.target_graph.open_state_flips(psa)
+                if state_flip.matches(str(obj))
             ]
             if not outstanding_flips:
                 continue
             payload = {
                 "object": obj,
+                "cause_id": f"{self.code}:{obj}",
                 "missing_flips": [s.predicate for s in outstanding_flips],
+                "flip_propositions": sorted(
+                    {int(state.proposition_index) for state in outstanding_flips}
+                ),
             }
             events.append(
                 ReboundEvent(
@@ -538,16 +586,10 @@ class RequiredStateFlipOmittedDetector(ReboundTemplate):
                     payload=payload,
                 )
             )
-            events.append(
-                ReboundEvent(
-                    step=obs.step,
-                    kind="t_r",
-                    template=self.code,
-                    severity=float(len(outstanding_flips) + 1),
-                    agent_uid=frame.agent_uid,
-                    payload=payload,
-                )
-            )
+            self._open_objects[str(obj)] = {
+                "opened_at": int(obs.step),
+                "flip_propositions": list(payload["flip_propositions"]),
+            }
             self._last_fired_step = obs.step
         return events
 
@@ -594,11 +636,6 @@ class PhaseRegionDeviationDetector(ReboundTemplate):
     ) -> bool:
         if not frame.is_nav:
             return False
-        # ``Explore[room]`` is an intentionally coarse search skill. Without a
-        # room-level target graph we treat it as neutral instead of
-        # automatically penalizing it as off-target drift.
-        if frame.name == "explore":
-            return False
         target_id = frame.primary_arg
         if not target_id:
             return False
@@ -625,7 +662,9 @@ class PhaseRegionDeviationDetector(ReboundTemplate):
                 else:
                     relevant_this_step = True
 
-        if obs.any_manipulation and obs.delta_q >= 0:
+        if obs.any_manipulation and (
+            obs.delta_progress > 1e-6 or obs.delta_q > 1e-6
+        ):
             relevant_this_step = True
 
         if self._open_since is not None:
@@ -654,32 +693,22 @@ class PhaseRegionDeviationDetector(ReboundTemplate):
             and any_nav
             and obs.step - self._last_fired_step >= self.cooldown
         ):
-            self._open_since = obs.step
+            onset_step = max(1, int(obs.step) - int(self._streak) + 1)
+            self._open_since = onset_step
             events.append(
                 ReboundEvent(
-                    step=obs.step,
+                    step=onset_step,
                     kind="t_d",
                     template=self.code,
                     severity=float(self._streak),
-                    payload={"streak": int(self._streak)},
+                    payload={
+                        "streak": int(self._streak),
+                        "detected_at": int(obs.step),
+                    },
                 )
             )
             self._last_fired_step = obs.step
         return events
-
-    def finalize(self, last_step: int) -> List[ReboundEvent]:
-        if self._open_since is None:
-            return []
-        return [
-            ReboundEvent(
-                step=int(last_step),
-                kind="t_r",
-                template=self.code,
-                severity=0.5,
-                payload={"opened_at": int(self._open_since), "finalized": True},
-            )
-        ]
-
 
 # ----------------------------------------------------------------------
 # T4: null_pick_place_cycle
@@ -703,14 +732,35 @@ class NullPickPlaceCycleDetector(ReboundTemplate):
         self._last_pick: Dict[str, Tuple[int, Optional[int]]] = {}  # obj -> (step, agent)
         self._q_at_pick: Dict[str, float] = {}
         self._last_fired_step: int = -(10**9)
+        self._open_cycles: Dict[str, Dict[str, float]] = {}
 
     def reset(self) -> None:
         self._last_pick.clear()
         self._q_at_pick.clear()
         self._last_fired_step = -(10**9)
+        self._open_cycles.clear()
 
     def observe(self, obs: TemplateObservation) -> List[ReboundEvent]:
         events: List[ReboundEvent] = []
+        for obj, state in list(self._open_cycles.items()):
+            if (
+                obs.curr_q > float(state["q_at_onset"]) + 1e-6
+                or obs.curr_progress > float(state["progress_at_onset"]) + 1e-6
+            ):
+                events.append(
+                    ReboundEvent(
+                        step=obs.step,
+                        kind="t_r",
+                        template=self.code,
+                        severity=0.0,
+                        payload={
+                            "object": obj,
+                            "opened_at": int(state["opened_at"]),
+                            "cause_id": f"{self.code}:{obj}",
+                        },
+                    )
+                )
+                self._open_cycles.pop(obj, None)
         for frame in obs.frames:
             if frame.is_pick and frame.primary_arg:
                 self._last_pick[str(frame.primary_arg)] = (int(obs.step), frame.agent_uid)
@@ -730,6 +780,8 @@ class NullPickPlaceCycleDetector(ReboundTemplate):
             if not frame.is_place or not frame.primary_arg:
                 continue
             obj = str(frame.primary_arg)
+            if obj in self._open_cycles:
+                continue
             pick_entry = self._last_pick.get(obj)
             if pick_entry is None:
                 continue
@@ -739,7 +791,10 @@ class NullPickPlaceCycleDetector(ReboundTemplate):
             if obs.target_graph is not None and frame.secondary_arg is not None:
                 closes_placement = any(
                     p.matches(obj, frame.secondary_arg)
-                    for p in obs.target_graph.open_placements(obs.proposition_satisfied_at)
+                    for p in obs.target_graph.open_placements(
+                        obs.proposition_satisfied_at
+                    )
+                    if p.is_action_matchable
                 )
             if closes_placement:
                 self._last_pick.pop(obj, None)
@@ -752,30 +807,26 @@ class NullPickPlaceCycleDetector(ReboundTemplate):
             payload = {
                 "object": obj,
                 "receptacle": frame.secondary_arg,
+                "cause_id": f"{self.code}:{obj}",
                 "picked_at": int(pick_step),
                 "placed_at": int(obs.step),
                 "q_delta": float(obs.curr_q) - float(q_before),
             }
             events.append(
                 ReboundEvent(
-                    step=obs.step,
+                    step=int(pick_step),
                     kind="t_d",
                     template=self.code,
                     severity=float(2.0),
                     agent_uid=frame.agent_uid or pick_agent,
-                    payload=payload,
+                    payload={**payload, "detected_at": int(obs.step)},
                 )
             )
-            events.append(
-                ReboundEvent(
-                    step=obs.step,
-                    kind="t_r",
-                    template=self.code,
-                    severity=float(2.0),
-                    agent_uid=frame.agent_uid or pick_agent,
-                    payload=payload,
-                )
-            )
+            self._open_cycles[obj] = {
+                "opened_at": float(obs.step),
+                "q_at_onset": float(obs.curr_q),
+                "progress_at_onset": float(obs.curr_progress),
+            }
             self._last_fired_step = obs.step
             self._last_pick.pop(obj, None)
             self._q_at_pick.pop(obj, None)

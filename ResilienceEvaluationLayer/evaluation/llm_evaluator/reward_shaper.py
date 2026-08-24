@@ -7,6 +7,7 @@ environment-based rewards. This helps with sparse reward problems.
 
 import json
 import logging
+import math
 import os
 from typing import Dict, Any, Optional, Tuple
 import hashlib
@@ -17,6 +18,13 @@ from .prompt_evaluation import (
 )
 
 logger = logging.getLogger(__name__)
+
+REWARD_SHAPER_SCHEMA_VERSION = "reward_shaper_v2_structured_scores"
+REWARD_SHAPER_SCORE_WEIGHTS = {
+    "goal_progress_score": 0.4,
+    "rationality_score": 0.4,
+    "efficiency_score": 0.2,
+}
 
 
 class LLMRewardShaper:
@@ -75,6 +83,11 @@ class LLMRewardShaper:
         if self.save_shaping_logs and self.log_dir:
             os.makedirs(self.log_dir, exist_ok=True)
         self._log_entries = 0
+        # Once a required API call or schema parse fails, the episode is no
+        # longer eligible for formal critic evidence.  The rollout may still
+        # continue diagnostically with a zero bonus.
+        self.valid = True
+        self.invalid_reason = ""
 
         # Cache for similar states (to reduce API costs)
         self.cache: Dict[str, Dict[str, Any]] = {}
@@ -308,17 +321,33 @@ class LLMRewardShaper:
             )
 
             if not response_text:
+                self.valid = False
+                self.invalid_reason = "empty_reward_shaper_response"
                 return 0.0, {}, None
 
             # Parse JSON response
             result = json.loads(response_text)
+            required_scores = (
+                "goal_progress_score",
+                "rationality_score",
+                "efficiency_score",
+            )
+            if not all(
+                key in result
+                and isinstance(result[key], (int, float))
+                and math.isfinite(float(result[key]))
+                for key in required_scores
+            ):
+                self.valid = False
+                self.invalid_reason = "reward_shaper_schema_invalid"
+                return 0.0, {}, response_text
 
             # Compute weighted bonus
             # Adjusted weights: Goal Progress 0.4, Rationality 0.4, Efficiency 0.2
             llm_bonus = (
-                result.get('goal_progress_score', 0.0) * 0.4 +
-                result.get('rationality_score', 0.0) * 0.4 +
-                result.get('efficiency_score', 0.0) * 0.2
+                result.get('goal_progress_score', 0.0) * REWARD_SHAPER_SCORE_WEIGHTS['goal_progress_score'] +
+                result.get('rationality_score', 0.0) * REWARD_SHAPER_SCORE_WEIGHTS['rationality_score'] +
+                result.get('efficiency_score', 0.0) * REWARD_SHAPER_SCORE_WEIGHTS['efficiency_score']
             )
 
             # Clamp to [-1, 1]
@@ -332,11 +361,52 @@ class LLMRewardShaper:
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response as JSON: {e}")
             logger.error(f"Response text: {response_text}")
+            self.valid = False
+            self.invalid_reason = "reward_shaper_json_invalid"
             return 0.0, {}, response_text
 
         except Exception as e:
             logger.error(f"LLM evaluation failed: {e}")
+            self.valid = False
+            self.invalid_reason = f"reward_shaper_call_failed:{type(e).__name__}"
             return 0.0, {}, None
+
+    def preflight(self) -> Tuple[bool, str, Dict[str, Any]]:
+        """Validate model availability and the structured reward schema once."""
+
+        _bonus, result, response_text = self._query_llm(
+            state_desc="The task has started and no object has moved.",
+            action_desc="Wait briefly while observing the scene.",
+            next_state_desc="The scene is unchanged.",
+            base_reward=0.0,
+            task_instruction="Validate reward shaping output format.",
+            step_count=0,
+            action_history="None",
+            task_percent_complete=0.0,
+            perception_complete="Unknown",
+            action_response="None",
+        )
+        if not response_text:
+            return False, "reward_shaper_empty_response", {}
+        required = {
+            "goal_progress_score",
+            "rationality_score",
+            "efficiency_score",
+        }
+        missing = sorted(required - set(result))
+        if missing:
+            return (
+                False,
+                "reward_shaper_schema_missing:" + ",".join(missing),
+                dict(result),
+            )
+        try:
+            values = [float(result[name]) for name in sorted(required)]
+        except (TypeError, ValueError):
+            return False, "reward_shaper_schema_non_numeric", dict(result)
+        if any(not math.isfinite(value) for value in values):
+            return False, "reward_shaper_schema_non_finite", dict(result)
+        return True, "", dict(result)
 
     def _state_to_text(self, state: Dict[str, Any]) -> str:
         """

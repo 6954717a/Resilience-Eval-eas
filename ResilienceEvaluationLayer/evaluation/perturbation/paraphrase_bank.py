@@ -25,11 +25,12 @@ specific episodes (recommended for the paper's headline numbers).
 from __future__ import annotations
 
 import json
+import math
 import random
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 
 # Deterministic synonym replacement rules. Keys are case-insensitive source
@@ -97,59 +98,135 @@ class ParaphraseBank:
         mode: str = "surface_rewrite",
         anchor_id: Optional[str] = None,
         seed: int = 0,
+        intensity: float = 1.0,
     ) -> str:
         """Return a paraphrased version of ``instruction``.
 
-        The rewrite is deterministic given ``anchor_id`` and ``seed``.
+        The rewrite is deterministic given ``anchor_id`` and ``seed``.  For a
+        fixed input and seed, the number of operations is non-decreasing in
+        ``intensity``.  Zero intensity is always an exact no-op.
         """
+        rewritten, _metadata = self.rewrite_with_metadata(
+            instruction,
+            mode=mode,
+            anchor_id=anchor_id,
+            seed=seed,
+            intensity=intensity,
+        )
+        return rewritten
+
+    def rewrite_with_metadata(
+        self,
+        instruction: str,
+        mode: str = "surface_rewrite",
+        anchor_id: Optional[str] = None,
+        seed: int = 0,
+        intensity: float = 1.0,
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Return the rewrite and the operations used to realize its dose."""
+
         if not isinstance(instruction, str) or not instruction.strip():
-            return instruction
-        # Per-anchor overrides win when available.
-        if anchor_id and anchor_id in self.overrides:
+            return instruction, {
+                "operation_count": 0,
+                "max_operations": 0,
+                "rewrite_source": "empty_instruction",
+            }
+        intensity = _validate_intensity(intensity)
+        if intensity <= 0.0:
+            return instruction, {
+                "operation_count": 0,
+                "max_operations": 0,
+                "rewrite_source": "zero_intensity",
+            }
+
+        # Overrides are calibrated full-dose candidates. Partial doses use the
+        # compositional rules below so an override is never silently presented
+        # as a fractional perturbation.
+        if intensity >= 1.0 and anchor_id and anchor_id in self.overrides:
             options = list(self.overrides[anchor_id])
             if options:
                 idx = seed % len(options)
-                return options[idx]
+                return options[idx], {
+                    "operation_count": 1,
+                    "max_operations": 1,
+                    "rewrite_source": "anchor_override",
+                }
 
         rng = random.Random(f"{anchor_id or ''}::{seed}::{mode}")
         if mode == "surface_rewrite":
-            return self._surface_rewrite(instruction, rng)
+            return self._surface_rewrite(instruction, intensity)
         if mode == "filler_injection":
-            return self._filler_injection(instruction, rng)
+            return self._filler_injection(instruction, rng, intensity)
         raise ValueError(f"Unknown paraphrase mode: {mode!r}")
 
     # ------------------------------------------------------------------
-    def _surface_rewrite(self, instruction: str, rng: random.Random) -> str:
-        # Try each rule in order (longest first); replace only the first match.
+    def _surface_rewrite(
+        self,
+        instruction: str,
+        intensity: float,
+    ) -> Tuple[str, Dict[str, Any]]:
+        # Materialize a prefix of the full rewrite sequence. Prefix selection
+        # makes operation count monotone for every fixed instruction.
         rules = sorted(_SURFACE_REWRITES, key=lambda p: len(p[0]), reverse=True)
-        applied = 0
-        # Aim for 1-3 rewrites; keeps rewrites truthfully paraphrasic.
-        max_rewrites = rng.randint(1, 3)
+        steps: List[str] = []
         output = instruction
         for source, target in rules:
-            if applied >= max_rewrites:
+            if len(steps) >= 3:
                 break
             pattern = re.compile(rf"\b{re.escape(source)}\b", flags=re.IGNORECASE)
             new_output, n_sub = pattern.subn(target, output, count=1)
             if n_sub > 0:
                 output = new_output
-                applied += 1
-        if applied == 0:
+                steps.append(output)
+        if not steps:
             # Guarantee at least a trivial, meaning-preserving rewrite.
             output = output.strip()
             if not output.endswith("."):
                 output = output + "."
             output = "Instruction: " + output
-        return output
+            steps.append(output)
+        operation_count = max(1, int(math.ceil(intensity * len(steps) - 1.0e-12)))
+        operation_count = min(operation_count, len(steps))
+        return steps[operation_count - 1], {
+            "operation_count": operation_count,
+            "max_operations": len(steps),
+            "rewrite_source": "surface_rules",
+        }
 
-    def _filler_injection(self, instruction: str, rng: random.Random) -> str:
+    def _filler_injection(
+        self,
+        instruction: str,
+        rng: random.Random,
+        intensity: float,
+    ) -> Tuple[str, Dict[str, Any]]:
         pool = list(_FILLERS) + list(self.extra_fillers)
         if not pool:
-            return instruction
-        n = rng.randint(1, 2)
-        picks = rng.sample(pool, k=min(n, len(pool)))
+            return instruction, {
+                "operation_count": 0,
+                "max_operations": 0,
+                "rewrite_source": "empty_filler_pool",
+            }
+        max_fillers = min(2, len(pool))
+        n = max(1, int(math.ceil(intensity * max_fillers - 1.0e-12)))
+        ranked = list(pool)
+        rng.shuffle(ranked)
+        picks = ranked[: min(n, max_fillers)]
         suffix = " ".join(picks)
         output = instruction.rstrip()
         if not output.endswith("."):
             output = output + "."
-        return f"{output} {suffix}"
+        return f"{output} {suffix}", {
+            "operation_count": len(picks),
+            "max_operations": max_fillers,
+            "rewrite_source": "filler_bank",
+            "filler_count": len(picks),
+        }
+
+
+def _validate_intensity(value: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError("intensity must be a real number in [0, 1]")
+    parsed = float(value)
+    if not math.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
+        raise ValueError(f"intensity must be finite and in [0, 1]; got {value!r}")
+    return parsed

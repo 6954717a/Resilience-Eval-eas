@@ -4,8 +4,8 @@ timeout_min: 7200
 cpus_per_task: 4 #24
 name: ${hydra.job.name}
 _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
-account: siro
-qos: siro_high
+account: ${oc.env:SLURM_ACCOUNT,null}
+qos: ${oc.env:SLURM_QOS,null}
 tasks_per_node: 4 #make sure that tasks_per_node and gres are the same
 gpus_per_node: 4
 setup:

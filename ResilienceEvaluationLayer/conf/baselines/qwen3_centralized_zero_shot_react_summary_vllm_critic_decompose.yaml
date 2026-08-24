@@ -27,15 +27,14 @@ evaluation:
     # LLM integration
     use_llm_shaping: true
     use_llm_offline: true
-    shaping_weight: 0.5 # LLM评估的Reward影响
+    shaping_weight: 0.5
     llm_call_frequency: 5
-    llm_model: "moonshot-v1-32k" # Check available models on huiyan-ai
+    llm_model: "moonshot-v1-32k" # Confirm availability with the configured provider.
     cache_size: 1000
     
     # Custom API Configuration
-    # llm_base_url: "https://api.huiyan-ai.cn/v1"
-    llm_base_url: "https://api.moonshot.cn/v1"
-    # llm_api_key: "your-key-here" # Optional: set here or use OPENAI_API_KEY env var
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+    # Credentials are read from OPENAI_API_KEY; do not store them in this file.
     
     # Analysis & Checkpoints
     save_analyses: true
@@ -55,8 +54,8 @@ evaluation:
     adca:
       enabled: true
       llm_model: "moonshot-v1-32k"
-      llm_base_url: "https://api.moonshot.cn/v1"
-      # llm_api_key: "your-key-here" # Optional
+      llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+      # Credentials are read from OPENAI_API_KEY.
       adca_alpha: 1.0
       adca_fix_base: 0.2
       adca_orm_distribution: "last_step"

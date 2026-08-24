@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from accelerate import PartialState
 from omegaconf import DictConfig, OmegaConf
+from habitat_llm.config_redaction import redact_sensitive_fields
 from peft import LoraConfig, PeftModel, get_peft_model
 from torch.optim.optimizer import Optimizer as Optimizer
 from torch.utils.data import DataLoader
@@ -338,7 +339,11 @@ def main(config: DictConfig):
         print(f"{name}: {len(dataset)}")
 
     if not config.evaluate:
-        config_dict = {"train_config": OmegaConf.to_container(config)}
+        config_dict = {
+            "train_config": redact_sensitive_fields(
+                OmegaConf.to_container(config, resolve=False)
+            )
+        }
 
     if config.init_distrib:
         init_distrib()

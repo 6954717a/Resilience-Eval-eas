@@ -1,5 +1,5 @@
 llm:
-  _target_    : habitat_llm.llm.Llama  # 复用 Llama 类，因为它是一个通用的 HF 模型包装器
+  _target_    : habitat_llm.llm.Llama  # Reuse Llama as the generic Hugging Face model wrapper.
   _partial_   : True
 
 host          : ""
@@ -17,9 +17,7 @@ assistant_tag : "<|im_start|>assistant\n"
 eot_tag : "<|im_end|>\n"
 
 generation_params:
-  # HARDCODE here, show the model place
-  # engine          : "/XYFS01/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/model_cache/Qwen2.5-7B-Instruct"
-  engine          : "/XYFS01/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/model_cache/Qwen3-8B-Instruct"
+  engine          : "${oc.env:QWEN_MODEL_PATH}"
 
   prompt        : ''
   max_tokens    : 1024  # Increase the generation length, prevent truncation
@@ -29,6 +27,6 @@ generation_params:
   stop          : '\n'
   batch_response: False
   do_sample     : False
-  repetition_penalty : 1.1 # 适当增加重复惩罚
+  repetition_penalty : 1.1
   top_k         : 50
   top_p         : 1.0

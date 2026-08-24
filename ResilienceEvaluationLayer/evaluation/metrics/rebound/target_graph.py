@@ -27,20 +27,19 @@ Design notes
   Navigation-only movements that are not tied to a placement target are
   classified as ``irrelevant`` and penalised by template **T3**
   (``phase_region_deviation``).
-* A **stage** is a connected component in the topologically sorted
-  dependency DAG.  A stage carries the set of propositions that must be
-  satisfied before the *next* stage unlocks; the stage index is exactly
-  the ``ell_t`` used by :class:`StageResolver`.
+* A **stage** is a topological generation of the episode's
+  ``TemporalConstraint``. Dependencies are only a compatibility fallback
+  when the temporal constraint is unavailable.
 
 The graph is intentionally *read-only* after construction: it is built once
-per episode from the (mutated) ``env_interface`` at rollout start and then
-queried by the templates with constant-time lookups.
+per episode from the episode/runtime proposition tracker and then queried by
+the templates with constant-time lookups.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -52,11 +51,14 @@ logger = logging.getLogger(__name__)
 PLACEMENT_PREDICATES: Tuple[str, ...] = (
     "is_on_top",
     "is_inside",
+    "is_in_room",
     "is_next_to",
     "is_on_floor",
+    "is_clustered",
 )
 STATE_FLIP_PREDICATES: Tuple[str, ...] = (
     "is_clean",
+    "is_dirty",
     "is_powered_on",
     "is_powered_off",
     "is_filled",
@@ -83,10 +85,32 @@ class PlacementTarget:
     ) -> bool:
         if object_id is None or receptacle_id is None:
             return False
-        return (
-            str(object_id) in self.object_ids
-            and str(receptacle_id) in self.receptacle_ids
-        )
+        object_matches = str(object_id) in self.object_ids
+        if self.predicate == "is_on_floor":
+            receptacle = str(receptacle_id).strip().lower()
+            allowed = {
+                str(candidate).strip().lower()
+                for candidate in self.receptacle_ids
+            }
+            # ``("floor",)`` is the only intentionally generic form.  When
+            # dataset generation pairs ``is_on_floor`` with ``is_in_room``,
+            # construction below replaces it with exact ``floor_<room>``
+            # aliases so a placement on the wrong room's floor cannot count.
+            if allowed == {"floor"}:
+                return object_matches and (
+                    receptacle == "floor" or receptacle.startswith("floor_")
+                )
+            return object_matches and receptacle in allowed
+        return object_matches and str(receptacle_id) in self.receptacle_ids
+
+    @property
+    def is_action_matchable(self) -> bool:
+        """Whether a Place/Rearrange action can directly prove this target.
+
+        Room membership and relative/cluster relations require world-state
+        context that is intentionally not carried by this lightweight graph.
+        """
+        return self.predicate in {"is_on_top", "is_inside", "is_on_floor"}
 
 
 @dataclass(frozen=True)
@@ -170,36 +194,37 @@ class EpisodeTargetGraph:
         predecessor stages are fully satisfied.  We return the set of stage
         indices that contain at least one active proposition.
         """
+        if not self.stages:
+            return tuple()
         if not proposition_satisfied_at:
-            return tuple(s.stage_index for s in self.stages)
-        active: List[int] = []
+            return (self.stages[0].stage_index,)
         for stage in self.stages:
-            is_active = False
             for idx in stage.proposition_indices:
                 if 0 <= idx < len(proposition_satisfied_at):
                     if int(proposition_satisfied_at[idx]) < 0:
-                        is_active = True
-                        break
-            if is_active:
-                active.append(stage.stage_index)
-        return tuple(active) if active else tuple()
+                        return (stage.stage_index,)
+        return tuple()
 
     def open_placements(
         self, proposition_satisfied_at: Sequence[int]
     ) -> Tuple[PlacementTarget, ...]:
+        active_stages = set(self.active_stage_indices(proposition_satisfied_at))
         return tuple(
             p for p in self.placements
             if 0 <= p.proposition_index < len(proposition_satisfied_at)
             and int(proposition_satisfied_at[p.proposition_index]) < 0
+            and self.stage_of_proposition(p.proposition_index) in active_stages
         )
 
     def open_state_flips(
         self, proposition_satisfied_at: Sequence[int]
     ) -> Tuple[StateFlipTarget, ...]:
+        active_stages = set(self.active_stage_indices(proposition_satisfied_at))
         return tuple(
             s for s in self.state_flips
             if 0 <= s.proposition_index < len(proposition_satisfied_at)
             and int(proposition_satisfied_at[s.proposition_index]) < 0
+            and self.stage_of_proposition(s.proposition_index) in active_stages
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -257,8 +282,37 @@ def _as_tuple(values: Any) -> Tuple[str, ...]:
     return (str(values),)
 
 
+def _expand_ids(
+    values: Any,
+    aliases: Optional[Mapping[Any, Any]] = None,
+) -> Tuple[str, ...]:
+    """Return stable raw-id + planner-name aliases without duplicates."""
+
+    expanded: List[str] = []
+    alias_map = aliases or {}
+    for raw_value in _as_tuple(values):
+        candidates = [raw_value]
+        alias = alias_map.get(raw_value)
+        if alias is None:
+            # Region ids can be numeric in serialized/runtime records while
+            # perception mappings use an integer key (or vice versa).
+            try:
+                alias = alias_map.get(int(raw_value))
+            except (TypeError, ValueError):
+                alias = None
+        if alias is not None:
+            candidates.append(str(alias))
+        for candidate in candidates:
+            if candidate not in expanded:
+                expanded.append(candidate)
+    return tuple(expanded)
+
+
 def _extract_placement(
-    idx: int, prop_map: Mapping[str, Any]
+    idx: int,
+    prop_map: Mapping[str, Any],
+    entity_aliases: Optional[Mapping[Any, Any]] = None,
+    room_aliases: Optional[Mapping[Any, Any]] = None,
 ) -> Optional[PlacementTarget]:
     predicate = str(prop_map.get("function_name") or "")
     if predicate not in PLACEMENT_PREDICATES:
@@ -267,19 +321,39 @@ def _extract_placement(
     if not isinstance(args, Mapping):
         return None
 
-    # PartnR uses either ``object_names`` + ``receptacle_names`` (list form)
-    # or ``entity_handles_a_name`` + ``entity_handles_b_name``. Support both.
-    object_ids: Tuple[str, ...] = _as_tuple(
-        args.get("object_names")
-        or args.get("entity_handles_a_name")
-        or args.get("object_handles")
-    )
-    receptacle_ids: Tuple[str, ...] = _as_tuple(
-        args.get("receptacle_names")
-        or args.get("entity_handles_b_name")
-        or args.get("receptacle_handles")
-    )
-    number = int(args.get("number", 1) or 1)
+    if predicate == "is_clustered":
+        entity_groups = args.get("*args") or ()
+        if not isinstance(entity_groups, (list, tuple)) or not entity_groups:
+            return None
+        object_ids = _expand_ids(entity_groups[0], entity_aliases)
+        receptacle_ids = tuple(
+            entity
+            for group in entity_groups[1:]
+            for entity in _expand_ids(group, entity_aliases)
+        )
+    else:
+        # Accept both legacy name-based fields and dataset_generation handles.
+        object_ids = _expand_ids(
+            args.get("object_names")
+            or args.get("entity_handles_a_name")
+            or args.get("entity_handles_a")
+            or args.get("object_handles"),
+            entity_aliases,
+        )
+        raw_receptacles = (
+            args.get("receptacle_names")
+            or args.get("entity_handles_b_name")
+            or args.get("entity_handles_b")
+            or args.get("receptacle_handles")
+            or args.get("room_ids")
+        )
+        aliases = room_aliases if predicate == "is_in_room" else entity_aliases
+        receptacle_ids = _expand_ids(raw_receptacles, aliases)
+        if predicate == "is_on_floor" and object_ids:
+            receptacle_ids = ("floor",)
+
+    raw_number = args.get("number", 1)
+    number = int(raw_number or 1) if not isinstance(raw_number, (list, tuple)) else 1
     if not object_ids or not receptacle_ids:
         return None
     return PlacementTarget(
@@ -292,7 +366,9 @@ def _extract_placement(
 
 
 def _extract_state_flip(
-    idx: int, prop_map: Mapping[str, Any]
+    idx: int,
+    prop_map: Mapping[str, Any],
+    entity_aliases: Optional[Mapping[Any, Any]] = None,
 ) -> Optional[StateFlipTarget]:
     predicate = str(prop_map.get("function_name") or "")
     if predicate not in STATE_FLIP_PREDICATES:
@@ -300,10 +376,11 @@ def _extract_state_flip(
     args = prop_map.get("args") or {}
     if not isinstance(args, Mapping):
         return None
-    object_ids: Tuple[str, ...] = _as_tuple(
+    object_ids: Tuple[str, ...] = _expand_ids(
         args.get("object_names")
         or args.get("entity_handles_a_name")
-        or args.get("object_handles")
+        or args.get("object_handles"),
+        entity_aliases,
     )
     if not object_ids:
         return None
@@ -315,7 +392,7 @@ def _extract_state_flip(
                 target_value = bool(args[key])
             except Exception:
                 target_value = True
-    if predicate in ("is_powered_off", "is_empty", "is_closed"):
+    if predicate in ("is_dirty", "is_powered_off", "is_empty", "is_closed"):
         target_value = False
     return StateFlipTarget(
         proposition_index=int(idx),
@@ -328,16 +405,95 @@ def _extract_state_flip(
 def _compute_stages(
     n_props: int,
     dependencies: Sequence[Any],
+    constraints: Sequence[Any] = (),
 ) -> Tuple[StageSpec, ...]:
     """Topologically sort propositions into stages.
 
-    ``dependencies`` entries are expected to expose either mapping keys or
-    attributes ``proposition_indices`` (set this stage) and ``depends_on``
-    (must precede).  We collapse strongly connected predecessor sets into
-    a single stage: any proposition whose dependency chain has length ``k``
-    lands in stage ``k``.
+    ``TemporalConstraint`` is authoritative. Sequential dependency relations
+    are retained as a compatibility fallback for compact records that omit
+    constraints.
     """
     pred_depth: Dict[int, int] = {i: 0 for i in range(n_props)}
+
+    # TemporalConstraint is the authoritative task-order DAG. Runtime objects
+    # expose get_topological_generations(); serialized dataset entries expose
+    # type + args.dag_edges. Prefer either representation over dependencies,
+    # which control proposition query eligibility rather than temporal order.
+    for constraint in constraints:
+        groups: Sequence[Sequence[int]] = ()
+        if hasattr(constraint, "get_topological_generations"):
+            try:
+                groups = constraint.get_topological_generations() or ()
+            except Exception:
+                groups = ()
+        elif isinstance(constraint, Mapping):
+            constraint_type = str(constraint.get("type") or "")
+            if constraint_type == "TemporalConstraint":
+                constraint_args = constraint.get("args") or {}
+                edges = (
+                    constraint_args.get("dag_edges") or ()
+                    if isinstance(constraint_args, Mapping)
+                    else ()
+                )
+                predecessors: Dict[int, Set[int]] = {
+                    i: set() for i in range(n_props)
+                }
+                for edge in edges:
+                    if isinstance(edge, (list, tuple)) and len(edge) == 2:
+                        src, dst = int(edge[0]), int(edge[1])
+                        if src in predecessors and dst in predecessors:
+                            predecessors[dst].add(src)
+                groups_by_depth: Dict[int, List[int]] = {}
+                memo: Dict[int, int] = {}
+
+                def temporal_depth(i: int, visiting: Set[int]) -> int:
+                    if i in memo:
+                        return memo[i]
+                    if i in visiting:
+                        logger.warning("Cycle found in serialized TemporalConstraint")
+                        return 0
+                    visiting.add(i)
+                    value = max(
+                        (1 + temporal_depth(p, visiting) for p in predecessors[i]),
+                        default=0,
+                    )
+                    visiting.discard(i)
+                    memo[i] = value
+                    return value
+
+                for prop_idx in range(n_props):
+                    depth = temporal_depth(prop_idx, set())
+                    groups_by_depth.setdefault(depth, []).append(prop_idx)
+                groups = tuple(groups_by_depth[d] for d in sorted(groups_by_depth))
+        if groups:
+            assigned: Set[int] = set()
+            normalized: List[StageSpec] = []
+            for stage_idx, group in enumerate(groups):
+                valid = tuple(sorted(int(i) for i in group if 0 <= int(i) < n_props))
+                if valid:
+                    normalized.append(StageSpec(stage_idx, valid))
+                    assigned.update(valid)
+            missing = tuple(i for i in range(n_props) if i not in assigned)
+            if missing:
+                if normalized and normalized[0].stage_index == 0:
+                    normalized[0] = StageSpec(
+                        0, tuple(sorted(normalized[0].proposition_indices + missing))
+                    )
+                else:
+                    normalized.insert(0, StageSpec(0, missing))
+            return tuple(normalized)
+
+        # An explicit empty TemporalConstraint means all propositions are in
+        # one temporal generation.
+        if (
+            constraint.__class__.__name__ == "TemporalConstraint"
+            or (
+                isinstance(constraint, Mapping)
+                and str(constraint.get("type") or "") == "TemporalConstraint"
+            )
+        ):
+            return (StageSpec(0, tuple(range(n_props))),) if n_props else tuple()
+
     if dependencies:
         # Build a predecessor map
         predecessors: Dict[int, Set[int]] = {i: set() for i in range(n_props)}
@@ -350,7 +506,11 @@ def _compute_stages(
                 targets = getattr(dep, "proposition_indices", []) or []
                 preds = getattr(dep, "depends_on", []) or []
                 relation = str(getattr(dep, "relation_type", "before"))
-            if relation.lower() != "before":
+            if relation.lower() not in {
+                "before",
+                "after_satisfied",
+                "after_unsatisfied",
+            }:
                 continue
             for t in targets:
                 try:
@@ -399,6 +559,9 @@ def _compute_stages(
 def build_episode_target_graph(
     episode: Any,
     proposition_tracker: Optional[Mapping[str, Any]] = None,
+    *,
+    entity_aliases: Optional[Mapping[Any, Any]] = None,
+    room_aliases: Optional[Mapping[Any, Any]] = None,
 ) -> EpisodeTargetGraph:
     """Construct an :class:`EpisodeTargetGraph` from a CollaborationEpisode.
 
@@ -406,23 +569,32 @@ def build_episode_target_graph(
     ----------
     episode:
         ``CollaborationEpisode`` (or duck-typed counterpart) carrying
-        ``evaluation_propositions`` and optional ``evaluation_proposition_dependencies``.
+        ``evaluation_propositions`` and optional dependencies/constraints.
     proposition_tracker:
         Optional runtime ``info["auto_eval_proposition_tracker"]`` snapshot.
         When provided we prefer its already-unrolled ``propositions`` list so
-        templates stay consistent with what the runtime measure is scoring.
+        templates stay consistent with what the runtime measure is scoring;
+        its unrolled constraints are preferred for temporal stages as well.
+    entity_aliases, room_aliases:
+        Runtime mappings from simulator handles/region ids to the semantic
+        names emitted by planner actions. Both raw and semantic identifiers
+        are retained so dataset and action records share one lookup surface.
     """
     propositions: Sequence[Any] = ()
     dependencies: Sequence[Any] = ()
+    constraints: Sequence[Any] = ()
     if proposition_tracker and isinstance(proposition_tracker, Mapping):
         propositions = proposition_tracker.get("propositions") or ()
         dependencies = proposition_tracker.get("dependencies") or ()
+        constraints = proposition_tracker.get("constraints") or ()
     if not propositions and episode is not None:
         propositions = getattr(episode, "evaluation_propositions", ()) or ()
     if not dependencies and episode is not None:
         dependencies = (
             getattr(episode, "evaluation_proposition_dependencies", ()) or ()
         )
+    if not constraints and episode is not None:
+        constraints = getattr(episode, "evaluation_constraints", ()) or ()
 
     placements: List[PlacementTarget] = []
     state_flips: List[StateFlipTarget] = []
@@ -430,15 +602,109 @@ def build_episode_target_graph(
     for idx, prop in enumerate(propositions):
         prop_map = _as_mapping(prop)
         raw.append(prop_map)
-        placement = _extract_placement(idx, prop_map)
+        placement = _extract_placement(
+            idx,
+            prop_map,
+            entity_aliases=entity_aliases,
+            room_aliases=room_aliases,
+        )
         if placement is not None:
             placements.append(placement)
             continue
-        state_flip = _extract_state_flip(idx, prop_map)
+        state_flip = _extract_state_flip(
+            idx,
+            prop_map,
+            entity_aliases=entity_aliases,
+        )
         if state_flip is not None:
             state_flips.append(state_flip)
 
-    stages = _compute_stages(len(propositions), dependencies)
+    stages = _compute_stages(len(propositions), dependencies, constraints)
+    stage_by_proposition = {
+        proposition_index: stage.stage_index
+        for stage in stages
+        for proposition_index in stage.proposition_indices
+    }
+
+    # dataset_generation explicitly links ``is_on_floor`` to its companion
+    # ``is_in_room`` through a while_satisfied dependency. Prefer that edge:
+    # object identity alone is ambiguous when a temporal task moves the same
+    # object through different rooms in different stages.
+    explicit_floor_rooms: Dict[int, Set[int]] = {}
+    for dependency in dependencies:
+        if isinstance(dependency, Mapping):
+            relation = str(dependency.get("relation_type") or "")
+            targets = dependency.get("proposition_indices") or ()
+            predecessors = dependency.get("depends_on") or ()
+        else:
+            relation = str(getattr(dependency, "relation_type", "") or "")
+            targets = getattr(dependency, "proposition_indices", ()) or ()
+            predecessors = getattr(dependency, "depends_on", ()) or ()
+        if relation != "while_satisfied":
+            continue
+        for target_index in targets:
+            try:
+                floor_index = int(target_index)
+            except (TypeError, ValueError):
+                continue
+            for predecessor_index in predecessors:
+                try:
+                    room_index = int(predecessor_index)
+                except (TypeError, ValueError):
+                    continue
+                explicit_floor_rooms.setdefault(floor_index, set()).add(
+                    room_index
+                )
+
+    room_targets = {
+        p.proposition_index: p
+        for p in placements
+        if p.predicate == "is_in_room"
+    }
+    for index, floor_target in enumerate(placements):
+        if floor_target.predicate != "is_on_floor":
+            continue
+        explicit_indices = explicit_floor_rooms.get(
+            floor_target.proposition_index,
+            set(),
+        )
+        paired_rooms = [
+            room_targets[room_index]
+            for room_index in sorted(explicit_indices)
+            if room_index in room_targets
+        ]
+        if not paired_rooms:
+            # Compatibility fallback for legacy episodes without generated
+            # dependencies. Only bind an unambiguous room target from the same
+            # temporal generation; otherwise retain the generic floor target.
+            fallback_rooms = [
+                room_target
+                for room_target in room_targets.values()
+                if (
+                    set(room_target.object_ids) == set(floor_target.object_ids)
+                    and stage_by_proposition.get(room_target.proposition_index)
+                    == stage_by_proposition.get(floor_target.proposition_index)
+                )
+            ]
+            if len(fallback_rooms) == 1:
+                paired_rooms = fallback_rooms
+        if not paired_rooms:
+            continue
+        floor_ids: List[str] = []
+        for room_target in paired_rooms:
+            for room_id in room_target.receptacle_ids:
+                floor_id = (
+                    str(room_id)
+                    if str(room_id).startswith("floor_")
+                    else f"floor_{room_id}"
+                )
+                if floor_id not in floor_ids:
+                    floor_ids.append(floor_id)
+        if floor_ids:
+            placements[index] = replace(
+                floor_target,
+                receptacle_ids=tuple(floor_ids),
+            )
 
     placement_by_object: Dict[str, Tuple[PlacementTarget, ...]] = {}
     for p in placements:
@@ -469,7 +735,7 @@ def build_episode_target_graph(
 # ----------------------------------------------------------------------
 _NAV_ACTIONS = {"navigate", "goto", "explore", "findagent"}
 _PICK_ACTIONS = {"pick", "rearrange_pick"}
-_PLACE_ACTIONS = {"place", "rearrange_place"}
+_PLACE_ACTIONS = {"place", "rearrange", "rearrange_place"}
 _MANIP_ACTIONS = _PICK_ACTIONS | _PLACE_ACTIONS | {
     "open",
     "close",
@@ -519,8 +785,9 @@ def parse_action_entry(
     """Normalise an entry from ``planner_info['high_level_actions']``.
 
     Handles:
-    * tuples ``(name, primary, secondary?)``
-    * strings like ``"Navigate[obj_1]"`` / ``"Place[obj_1, rec_2]"``
+    * runtime tuples ``(name, comma_separated_action_input, error)``
+    * legacy tuples ``(name, primary, secondary?)``
+    * strings such as ``"Navigate[obj_1]"`` and five-slot ``Place[...]``
     * mappings with ``name``/``args`` keys.
     """
     if action_entry is None:
@@ -529,45 +796,57 @@ def parse_action_entry(
     primary: Optional[str] = None
     secondary: Optional[str] = None
 
-    def _select_secondary(action_name: Optional[str], parts: Sequence[Any]) -> Optional[str]:
+    def _parse_args(
+        action_name: Optional[str], args: Any
+    ) -> Tuple[Optional[str], Optional[str]]:
+        if args is None:
+            return None, None
+        if isinstance(args, str):
+            parts = [part.strip() for part in args.split(",")]
+        elif isinstance(args, (list, tuple)):
+            parts = [str(part).strip() for part in args if part is not None]
+        else:
+            parts = [str(args).strip()]
         if not parts:
-            return None
-        lowered = str(action_name).strip().lower() if action_name is not None else ""
-        normalized = [str(p) for p in parts if p is not None]
-        if not normalized:
-            return None
-        # Place / Rearrange typically look like:
-        #   Place[obj, on, receptacle, ...]
-        # so the receptacle lives in arg[2], not arg[1].
-        if lowered in {"place", "rearrange", "rearrange_place"} and len(normalized) > 2:
-            return normalized[2]
-        if len(normalized) > 1:
-            return normalized[1]
-        return None
+            return None, None
+        lowered = str(action_name or "").strip().lower()
+        first = parts[0] or None
+        if lowered in _PLACE_ACTIONS:
+            # Place/Rearrange[obj, relation, receptacle, constraint, reference]
+            if len(parts) >= 3:
+                return first, parts[2] or None
+            return first, (parts[1] or None) if len(parts) >= 2 else None
+        return first, (parts[1] or None) if len(parts) >= 2 else None
 
     if isinstance(action_entry, tuple) and action_entry:
         name = str(action_entry[0]) if action_entry[0] is not None else None
         if len(action_entry) > 1 and action_entry[1] is not None:
-            primary = str(action_entry[1])
-        secondary = _select_secondary(name, action_entry[1:])
+            primary, secondary = _parse_args(name, action_entry[1])
+        # Support legacy tuples (name, object, receptacle) while preserving the
+        # runtime tuple contract (name, comma-separated action_input, error).
+        if (
+            len(action_entry) > 2
+            and action_entry[2] is not None
+            and isinstance(action_entry[1], str)
+            and "," not in action_entry[1]
+        ):
+            secondary = str(action_entry[2])
     elif isinstance(action_entry, Mapping):
         name = action_entry.get("name") or action_entry.get("action")
         args = action_entry.get("args")
         if isinstance(args, (list, tuple)) and args:
-            primary = str(args[0]) if args[0] is not None else None
-            secondary = _select_secondary(name, args)
+            primary, secondary = _parse_args(name, args)
         elif isinstance(args, Mapping):
             primary = args.get("object") or args.get("object_id")
             secondary = args.get("receptacle") or args.get("receptacle_id")
+        else:
+            primary, secondary = _parse_args(name, args)
     elif isinstance(action_entry, str):
         text = action_entry.strip()
         if "[" in text and text.endswith("]"):
             head, body = text[:-1].split("[", 1)
             name = head
-            parts = [p.strip() for p in body.split(",") if p.strip()]
-            if parts:
-                primary = parts[0]
-            secondary = _select_secondary(name, parts)
+            primary, secondary = _parse_args(name, body)
         else:
             name = text
     else:

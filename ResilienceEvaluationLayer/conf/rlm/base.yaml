@@ -7,7 +7,7 @@ out_dir: rlm/running_servers/${exp_name}/server_list
 cluster: null
 cpu_per_task: 20
 days: 1
-account: siro
+account: ${oc.env:SLURM_ACCOUNT,null}
 ngpus: 2 # how many gpus
 n_servers: 1 # How many servers to run
 gres: "gpu:${ngpus}"

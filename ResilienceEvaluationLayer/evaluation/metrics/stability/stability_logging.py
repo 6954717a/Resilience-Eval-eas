@@ -86,15 +86,15 @@ def log_stability_metrics(
         "episode_filename": episode_filename,
         "stability_metrics": stability_metrics.to_dict(),
         "summary": {
-            "beta": stability_metrics.beta,
+            "episode_proxy": stability_metrics.episode_proxy,
             "value_variance": stability_metrics.value_variance,
             "value_delta_variance": stability_metrics.value_delta_variance,
             "n_replan": stability_metrics.n_replan,
             "p_cbf": stability_metrics.p_cbf,
         },
         "metadata": {
-            "beta_mode": stability_metrics.beta_mode,
-            "beta_scope": stability_metrics.beta_scope,
+            "episode_proxy_source": stability_metrics.episode_proxy_source,
+            "formal_beta_scope": "postprocess_clean_perturbation_neighborhood",
         },
     }
 

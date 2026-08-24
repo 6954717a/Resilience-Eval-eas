@@ -13,7 +13,7 @@
 # - MBR decoding for robust retry after backtracking
 #
 # Usage: 
-#   python -m habitat_llm.examples.planner_demo_mp \
+#   python -m habitat_llm.examples.planner_demo_mp_new \
 #     --config-name baselines/cyclevla_config.yaml \
 #     habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
 #     num_proc=1
@@ -27,7 +27,7 @@ evaluation:
   adca:
     enabled: true
     llm_model: "gpt-4o"
-    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
     adca_alpha: 1.0
     adca_fix_base: 0.2
     adca_orm_distribution: "last_step"
@@ -70,7 +70,7 @@ evaluation:
     cache_size: 1000
     
     # Custom API Configuration
-    llm_base_url: "https://api.huiyan-ai.cn/v1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
     
     # Analysis & Checkpoints
     save_analyses: true
@@ -133,7 +133,7 @@ evaluation:
         # --- VLM Failure Predictor Configuration ---
         # Model for VLM failure prediction (uses same API as critic)
         vlm_model: "gpt-4o"
-        vlm_base_url: "https://api.huiyan-ai.cn/v1"
+        vlm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
         
         # Minimum confidence threshold for backtrack decision
         # "high" = only backtrack on high confidence predictions
@@ -161,7 +161,7 @@ evaluation:
         # --- Decomposition Model ---
         # Model for initial task decomposition (can be same or different from main LLM)
         decomposition_model: "gpt-4o"
-        decomposition_base_url: "https://api.huiyan-ai.cn/v1"
+        decomposition_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
       
       # ========================================
       # Inner Monologue: Disabled for CycleVLA
@@ -184,4 +184,3 @@ evaluation:
           tool_failure_burst: false
           progress_stagnation: false
           immediate_error: false
-

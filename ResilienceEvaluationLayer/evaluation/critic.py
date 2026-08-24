@@ -6,10 +6,12 @@ Extended with neural network-based value function approximation.
 """
 
 from abc import ABC, abstractmethod
-from collections import Counter
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from collections import Counter, deque
+from typing import Any, Deque, Dict, List, Mapping, Optional, TextIO, Tuple, Union
+import json
 import logging
 import os
+import re
 
 import numpy as np
 import torch
@@ -19,6 +21,7 @@ import torch.nn.functional as F
 from habitat_llm.evaluation.eval_logging import write_critic_trajectory_export
 from habitat_llm.evaluation.experiments.common import infer_task_family
 from habitat_llm.evaluation.networks import StateEncoder, ValueNetwork
+from habitat_llm.evaluation.proposition_outcome import proposition_outcome_from_info
 from habitat_llm.evaluation.utils import compute_gae
 from habitat_llm.evaluation.llm_evaluator import LLMRewardShaper, LLMOfflineAnalyzer
 
@@ -105,56 +108,80 @@ class A2CCritic(BaseCritic):
             logger.warning("CUDA not available, falling back to CPU")
             self.device = "cpu"
 
+        self.phase = str(self.config.get("phase", "evaluation")).lower()
+        if self.phase not in {"train", "training_collect", "reference", "evaluation"}:
+            self.phase = "evaluation"
+        self.freeze_state_encoder = bool(
+            self.config.get("freeze_state_encoder", self.phase != "train")
+        )
+        self.update_value_network = bool(
+            self.config.get("update_value_network", self.phase == "train")
+        )
+        self.reward_shaper_valid = bool(
+            self.config.get("reward_shaper_valid", not self.config.get("use_llm_shaping", False))
+        )
+        self.critic_lifecycle_valid = bool(
+            self.config.get("critic_lifecycle_valid", False)
+        )
+        self.judge_model = str(
+            self.config.get("llm_model") or "unconfigured-judge"
+        ).strip()
+        self.initialization_seed = int(
+            self.config.get("initialization_seed", 47668090)
+        )
+
         # Initialize neural networks
         self.state_encoder_config = self._normalize_state_encoder_config(self.config)
 
-        self.state_encoder = StateEncoder(
-            text_dim=self.state_encoder_config["text_dim"],
-            numerical_dim=self.state_encoder_config["numerical_dim"],
-            hidden_dim=self.state_encoder_config["hidden_dim"],
-            output_dim=self.state_encoder_config["output_dim"],
-            text_encoder_model=self.state_encoder_config["text_encoder_model"],
-            text_encoder_local_files_only=self.state_encoder_config[
-                "text_encoder_local_files_only"
-            ],
-            text_encoder_cache_dir=self.state_encoder_config["text_encoder_cache_dir"],
-            text_encoder_fallback=self.state_encoder_config["text_encoder_fallback"],
-            device=self.device,
-            debug=self.state_encoder_config["debug"],
-            debug_dir=self.state_encoder_config["debug_dir"],
-            debug_frequency=self.state_encoder_config["debug_frequency"],
-            debug_max_entries=self.state_encoder_config["debug_max_entries"],
-            debug_log_state=self.state_encoder_config["debug_log_state"],
-            debug_log_next_state=self.state_encoder_config["debug_log_next_state"],
-            debug_log_on_change=self.state_encoder_config["debug_log_on_change"],
-            debug_change_threshold=self.state_encoder_config["debug_change_threshold"],
-            debug_text_max_len=self.state_encoder_config["debug_text_max_len"],
-            debug_log_delta=self.state_encoder_config["debug_log_delta"],
-            debug_log_task_context_once=self.state_encoder_config[
-                "debug_log_task_context_once"
-            ],
-            debug_log_full_features_first=self.state_encoder_config[
-                "debug_log_full_features_first"
-            ],
-            debug_key_feature_names=self.state_encoder_config["debug_key_feature_names"],
-            debug_signature_mode=self.state_encoder_config["debug_signature_mode"],
-            debug_signature_feature_names=self.state_encoder_config[
-                "debug_signature_feature_names"
-            ],
-            input_variant=self.state_encoder_config["input_variant"],
-            context_variant=self.state_encoder_config["context_variant"],
-            distance_norm=self.state_encoder_config["distance_norm"],
-            count_norm=self.state_encoder_config["count_norm"],
-            action_history_cap=self.state_encoder_config["action_history_cap"],
-            fusion_dropout_rate=self.state_encoder_config["fusion_dropout_rate"],
-        )
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(self.initialization_seed)
+            self.state_encoder = StateEncoder(
+                text_dim=self.state_encoder_config["text_dim"],
+                numerical_dim=self.state_encoder_config["numerical_dim"],
+                hidden_dim=self.state_encoder_config["hidden_dim"],
+                output_dim=self.state_encoder_config["output_dim"],
+                text_encoder_model=self.state_encoder_config["text_encoder_model"],
+                text_encoder_local_files_only=self.state_encoder_config[
+                    "text_encoder_local_files_only"
+                ],
+                text_encoder_cache_dir=self.state_encoder_config["text_encoder_cache_dir"],
+                text_encoder_fallback=self.state_encoder_config["text_encoder_fallback"],
+                device=self.device,
+                debug=self.state_encoder_config["debug"],
+                debug_dir=self.state_encoder_config["debug_dir"],
+                debug_frequency=self.state_encoder_config["debug_frequency"],
+                debug_max_entries=self.state_encoder_config["debug_max_entries"],
+                debug_log_state=self.state_encoder_config["debug_log_state"],
+                debug_log_next_state=self.state_encoder_config["debug_log_next_state"],
+                debug_log_on_change=self.state_encoder_config["debug_log_on_change"],
+                debug_change_threshold=self.state_encoder_config["debug_change_threshold"],
+                debug_text_max_len=self.state_encoder_config["debug_text_max_len"],
+                debug_log_delta=self.state_encoder_config["debug_log_delta"],
+                debug_log_task_context_once=self.state_encoder_config[
+                    "debug_log_task_context_once"
+                ],
+                debug_log_full_features_first=self.state_encoder_config[
+                    "debug_log_full_features_first"
+                ],
+                debug_key_feature_names=self.state_encoder_config["debug_key_feature_names"],
+                debug_signature_mode=self.state_encoder_config["debug_signature_mode"],
+                debug_signature_feature_names=self.state_encoder_config[
+                    "debug_signature_feature_names"
+                ],
+                input_variant=self.state_encoder_config["input_variant"],
+                context_variant=self.state_encoder_config["context_variant"],
+                distance_norm=self.state_encoder_config["distance_norm"],
+                count_norm=self.state_encoder_config["count_norm"],
+                action_history_cap=self.state_encoder_config["action_history_cap"],
+                fusion_dropout_rate=self.state_encoder_config["fusion_dropout_rate"],
+            )
 
-        self.value_network = ValueNetwork(
-            state_dim=self.state_encoder_config["output_dim"],
-            hidden_dims=self.config.get("value_hidden_dims", [256, 128, 64]),
-            dropout_rate=self.config.get("dropout_rate", 0.1),
-            device=self.device
-        )
+            self.value_network = ValueNetwork(
+                state_dim=self.state_encoder_config["output_dim"],
+                hidden_dims=self.config.get("value_hidden_dims", [256, 128, 64]),
+                dropout_rate=self.config.get("dropout_rate", 0.1),
+                device=self.device
+            )
         self.inference_mode = str(
             self.config.get("inference_mode", "current")
         ).lower()
@@ -166,6 +193,15 @@ class A2CCritic(BaseCritic):
             self.value_network.parameters(),
             lr=self.config.get("value_lr", 1e-3)
         )
+        self.state_encoder_id = ""
+        self.value_checkpoint_id = ""
+        self._load_component_checkpoints()
+        if self.freeze_state_encoder:
+            for parameter in self.state_encoder.parameters():
+                parameter.requires_grad_(False)
+        if not self.update_value_network:
+            for parameter in self.value_network.parameters():
+                parameter.requires_grad_(False)
 
         # LLM components (optional)
         self.use_llm_shaping = self.config.get("use_llm_shaping", False)
@@ -335,18 +371,44 @@ class A2CCritic(BaseCritic):
         self.analysis_export_max_selected_transitions = max(
             1, int(self.config.get("analysis_export_max_selected_transitions", 96))
         )
+        self.analysis_export_full_trajectory = bool(
+            self.config.get("analysis_export_full_trajectory", False)
+        )
         self.analysis_export_progress_delta_threshold = float(
             self.config.get("analysis_export_progress_delta_threshold", 1e-6)
         )
         self.analysis_save_dir = self.config.get("analysis_save_dir", "./analyses")
         self.analysis_export_dir = self.config.get("analysis_export_dir")
         self.runner_output_dir = self.config.get("runner_output_dir")
+        self.analysis_focus_export_enabled = bool(
+            self.config.get(
+                "analysis_focus_export_enabled",
+                self.analysis_export_enabled,
+            )
+        )
+        self.analysis_focus_dir = self.config.get("analysis_focus_dir")
         if not self.analysis_export_dir:
             self.analysis_export_dir = os.path.join(
                 self.analysis_save_dir, "critic_exports"
             )
+        if not self.analysis_focus_dir:
+            focus_root = self.runner_output_dir or self._resolve_export_output_dir()
+            self.analysis_focus_dir = os.path.join(focus_root, "analyze")
         if self.analysis_export_enabled:
             os.makedirs(self.analysis_export_dir, exist_ok=True)
+        self._episode_feature_schema: Dict[str, Any] = {}
+        self._focus_recent: Deque[Tuple[int, Dict[str, Any]]] = deque(
+            maxlen=max(1, self.analysis_replan_pre_sim_steps)
+        )
+        self._focus_stream: Optional[TextIO] = None
+        self._focus_stream_path: Optional[str] = None
+        self._focus_written_indices: set[int] = set()
+        self._focus_previous_planning_step: Optional[int] = None
+        self._focus_previous_progress: Optional[float] = None
+        self._focus_previous_success: Optional[float] = None
+        self._focus_post_remaining = 0
+        self._focus_last_candidate: Optional[Tuple[int, Dict[str, Any]]] = None
+        self.last_focus_export_path: Optional[str] = None
 
         # Training statistics
         self.training_stats = {
@@ -598,6 +660,44 @@ class A2CCritic(BaseCritic):
             self.state_encoder.train()
             self.value_network.train()
 
+    def _load_component_checkpoints(self) -> None:
+        """Load immutable StateEncoder and ValueNetwork components from config."""
+
+        from habitat_llm.evaluation.core.critic_lifecycle import (
+            checkpoint_component_id,
+        )
+
+        state_path = str(self.config.get("state_encoder_checkpoint") or "")
+        value_path = str(self.config.get("value_checkpoint") or "")
+        if state_path:
+            checkpoint = torch.load(state_path, map_location=self.device)
+            state_dict = checkpoint.get("state_encoder") if isinstance(checkpoint, dict) else None
+            if not isinstance(state_dict, dict):
+                raise ValueError(
+                    f"StateEncoder checkpoint has no state_encoder weights: {state_path}"
+                )
+            self.state_encoder.load_state_dict(state_dict)
+            self.state_encoder_id = checkpoint_component_id(
+                state_path, "state_encoder"
+            )
+        if value_path:
+            checkpoint = torch.load(value_path, map_location=self.device)
+            state_dict = checkpoint.get("value_network") if isinstance(checkpoint, dict) else None
+            if not isinstance(state_dict, dict):
+                raise ValueError(
+                    f"Value checkpoint has no value_network weights: {value_path}"
+                )
+            self.value_network.load_state_dict(state_dict)
+            self.value_checkpoint_id = checkpoint_component_id(
+                value_path, "value_network"
+            )
+        if bool(self.config.get("require_component_checkpoints", False)):
+            if not self.state_encoder_id or not self.value_checkpoint_id:
+                raise ValueError(
+                    "Formal Critic phase requires both StateEncoder and ValueNetwork checkpoints"
+                )
+        self._apply_execution_mode()
+
     def _resolve_export_output_dir(self) -> str:
         if self.runner_output_dir:
             return self.runner_output_dir
@@ -761,30 +861,9 @@ class A2CCritic(BaseCritic):
         self,
         info: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        tracker = {}
-        if isinstance(info, dict):
-            tracker = info.get("auto_eval_proposition_tracker", {}) or {}
-        satisfied_at = tracker.get("proposition_satisfied_at", []) or []
-        if isinstance(satisfied_at, tuple):
-            satisfied_at = list(satisfied_at)
-        total = len(satisfied_at) if isinstance(satisfied_at, list) else 0
-        satisfied = (
-            sum(1 for value in satisfied_at if value is not None and self._safe_int(value, -1) >= 0)
-            if isinstance(satisfied_at, list)
-            else 0
+        return proposition_outcome_from_info(info).info_fields(
+            include_tracker=True
         )
-        summary = {
-            "proposition_satisfied_count": satisfied,
-            "proposition_total": total,
-        }
-        if isinstance(satisfied_at, list) and satisfied_at:
-            # Preserve the stage frontier for offline StageBaselineEstimator.
-            # Counts alone are only a compact fallback; the ordered list is the
-            # exact representation used by OnlineReboundTracker at runtime.
-            compact_tracker = {"proposition_satisfied_at": list(satisfied_at)}
-            summary["proposition_satisfied_at"] = list(satisfied_at)
-            summary["auto_eval_proposition_tracker"] = compact_tracker
-        return summary
 
     def _analysis_export_manifest(self) -> Dict[str, Any]:
         return {
@@ -819,6 +898,16 @@ class A2CCritic(BaseCritic):
             "keep_success_transition": self.analysis_export_keep_success_transition,
             "keep_td_error_topk": self.analysis_export_keep_td_error_topk,
             "max_selected_transitions": self.analysis_export_max_selected_transitions,
+            "full_stability_trajectory": self.analysis_export_full_trajectory,
+            "full_trajectory_storage": "compact_numeric_in_memory",
+            "focused_state_storage": "jsonl",
+            "focused_state_path": self.last_focus_export_path,
+            "critic_phase": self.phase,
+            "judge_model": self.judge_model,
+            "state_encoder_id": self.state_encoder_id,
+            "value_checkpoint_id": self.value_checkpoint_id,
+            "reward_shaper_valid": bool(self.reward_shaper_valid),
+            "critic_lifecycle_valid": bool(self.critic_lifecycle_valid),
             "record_field_whitelist": [
                 "episode_id",
                 "transition_index",
@@ -868,6 +957,16 @@ class A2CCritic(BaseCritic):
             "episode_id": info.get("episode_id"),
             "episode_filename": info.get("episode_filename"),
             "task_instruction": info.get("task_instruction"),
+            "policy_instruction": info.get(
+                "policy_instruction", info.get("task_instruction")
+            ),
+            "reward_instruction": info.get(
+                "reward_instruction", info.get("task_instruction")
+            ),
+            "canonical_instruction": info.get(
+                "canonical_instruction",
+                info.get("reward_instruction", info.get("task_instruction")),
+            ),
             "task_percent_complete": float(info.get("task_percent_complete", 0.0)),
             "task_state_success": float(info.get("task_state_success", 0.0)),
             "step_count": self._info_sim_step_count(info),
@@ -942,20 +1041,353 @@ class A2CCritic(BaseCritic):
         self,
         world_state: Optional[Dict[str, Any]],
     ) -> Optional[Dict[str, Any]]:
-        """Keep only fields needed after the transition is encoded."""
+        """World-state payloads live in the sparse focus stream, not the core buffer."""
+        return None
+
+    @staticmethod
+    def _sanitize_analysis_name(value: Any, fallback: str) -> str:
+        text = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "").strip())
+        return text.strip("._") or fallback
+
+    def _compact_transition_info(
+        self,
+        info: Optional[Mapping[str, Any]],
+    ) -> Dict[str, Any]:
+        """Retain only fields required by Stability, StageBaseline and LLM summaries."""
+        if not isinstance(info, Mapping):
+            return {}
+        compact: Dict[str, Any] = {}
+        for key in (
+            "episode_id",
+            "episode_filename",
+            "task_instruction",
+            "policy_instruction",
+            "reward_instruction",
+            "canonical_instruction",
+            "task_percent_complete",
+            "task_state_success",
+            "step_count",
+            "sim_step_count",
+            "loop_step_count",
+            "planning_step_count",
+            "action_history_count",
+            "task_family",
+            "analysis_export_enabled",
+            "counterfactual_name",
+            "occluded_category",
+            "perturbation_requested",
+            "perturbation_realized",
+            "perturbation_valid",
+            "perturbation_reason",
+        ):
+            if key in info:
+                compact[key] = info[key]
+
+        outcome = proposition_outcome_from_info(info)
+        compact.update(outcome.info_fields(include_tracker=False))
+
+        action_history = info.get("action_history", []) or []
+        if action_history:
+            last_action = action_history[-1]
+            if isinstance(last_action, Mapping):
+                compact["action_history"] = [
+                    {
+                        key: last_action.get(key)
+                        for key in (
+                            "action",
+                            "response",
+                            "timestamp",
+                            "agent_uid",
+                        )
+                        if key in last_action
+                    }
+                ]
+            else:
+                compact["action_history"] = [
+                    {
+                        "action": getattr(last_action, "action", None),
+                        "response": getattr(last_action, "response", ""),
+                        "timestamp": getattr(last_action, "timestamp", None),
+                        "agent_uid": getattr(last_action, "agent_uid", None),
+                    }
+                ]
+        action_responses = info.get("action_responses", {}) or {}
+        if isinstance(action_responses, Mapping):
+            compact["action_responses"] = {
+                str(key): value
+                for key, value in action_responses.items()
+                if value not in (None, "")
+            }
+        return compact
+
+    def _compact_encode_artifacts(
+        self,
+        artifacts: Optional[Mapping[str, Any]],
+    ) -> Dict[str, Any]:
+        """Convert the full encoder audit record to small fixed-size arrays/hashes."""
+        if not isinstance(artifacts, Mapping):
+            return {}
+        compact = {
+            key: artifacts.get(key)
+            for key in (
+                "feature_schema_version",
+                "input_variant",
+                "context_variant",
+                "world_state_hash",
+                "task_context_hash",
+                "text_desc_hash",
+                "semantic_text_hash",
+            )
+            if artifacts.get(key) is not None
+        }
+        for key in ("numerical_features", "state_vector"):
+            values = artifacts.get(key, [])
+            if values is None:
+                values = []
+            compact[key] = np.asarray(values, dtype=np.float32)
+        if not self._episode_feature_schema:
+            self._episode_feature_schema = {
+                "version": artifacts.get("feature_schema_version", ""),
+                "feature_names": list(artifacts.get("feature_names", []) or []),
+                "feature_categories": list(
+                    artifacts.get("feature_categories", []) or []
+                ),
+            }
+        return compact
+
+    def _focus_encode_artifacts(
+        self,
+        artifacts: Optional[Mapping[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build a richer, JSON-safe record only for focused analysis steps."""
+        if not isinstance(artifacts, Mapping):
+            return {}
+        keep = {
+            "feature_schema_version",
+            "input_variant",
+            "context_variant",
+            "state_kind",
+            "task_family",
+            "world_state_hash",
+            "task_context_hash",
+            "text_desc",
+            "text_desc_hash",
+            "semantic_text_hash",
+            "text_segments",
+            "feature_names",
+            "feature_categories",
+            "numerical_features",
+            "state_vector",
+            "category_presence",
+            "diagnostics",
+        }
+        if self.analysis_export_include_text_embedding:
+            keep.add("text_embedding")
+        return {key: artifacts[key] for key in keep if key in artifacts}
+
+    def _focus_world_state_snapshot(
+        self,
+        world_state: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Always use a task-scoped compact world state for focus records."""
         if not isinstance(world_state, dict):
             return None
-        if self.analysis_export_world_state_mode == "full":
-            return world_state
-        if self.analysis_export_world_state_mode == "compact":
+        original_mode = self.analysis_export_world_state_mode
+        try:
+            self.analysis_export_world_state_mode = "compact"
             return self._export_world_state_snapshot(world_state)
-        if self.analysis_export_include_task_context or self.offline_analyzer:
-            return {
-                "task_context": dict(world_state.get("task_context", {}) or {}),
-                "agent_poses": dict(world_state.get("agent_poses", {}) or {}),
-                "agent_holdings": dict(world_state.get("agent_holdings", {}) or {}),
-            }
-        return None
+        finally:
+            self.analysis_export_world_state_mode = original_mode
+
+    def _focus_candidate(
+        self,
+        *,
+        transition_index: int,
+        action: Any,
+        reward_env: float,
+        reward_shaped: float,
+        done: bool,
+        info: Dict[str, Any],
+        state: Optional[Dict[str, Any]],
+        next_state: Optional[Dict[str, Any]],
+        state_artifacts: Dict[str, Any],
+        next_state_artifacts: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return {
+            "transition_index": int(transition_index),
+            "episode_id": info.get("episode_id"),
+            "episode_filename": info.get("episode_filename"),
+            "sim_step_count": self._info_sim_step_count(info),
+            "planning_step_count": self._info_planning_step_count(info),
+            "task_family": info.get("task_family", "other"),
+            "action": self._action_to_text(action),
+            "reward_env": float(reward_env),
+            "reward_shaped": float(reward_shaped),
+            "done": bool(done),
+            "info_snapshot": self._export_info_snapshot(info),
+            "state": self._focus_world_state_snapshot(state),
+            "next_state": self._focus_world_state_snapshot(next_state),
+            "state_artifacts": self._focus_encode_artifacts(state_artifacts),
+            "next_state_artifacts": self._focus_encode_artifacts(
+                next_state_artifacts
+            ),
+        }
+
+    def _ensure_focus_stream(self, info: Mapping[str, Any]) -> Optional[TextIO]:
+        if not self.analysis_focus_export_enabled:
+            return None
+        if self._focus_stream is not None:
+            return self._focus_stream
+        os.makedirs(self.analysis_focus_dir, exist_ok=True)
+        episode_id = self._sanitize_analysis_name(info.get("episode_id"), "unknown")
+        episode_filename = self._sanitize_analysis_name(
+            info.get("episode_filename"), "episode"
+        )
+        path = os.path.join(
+            self.analysis_focus_dir,
+            f"critic_focus-episode_{episode_id}_{episode_filename}.jsonl",
+        )
+        self._focus_stream = open(path, "w", encoding="utf-8")
+        self._focus_stream_path = path
+        self.last_focus_export_path = path
+        header = {
+            "record_type": "manifest",
+            "schema_version": 1,
+            "focus_mode": self.analysis_focus_mode,
+            "replan_pre_sim_steps": self.analysis_replan_pre_sim_steps,
+            "replan_post_sim_steps": self.analysis_replan_post_sim_steps,
+            "episode_id": info.get("episode_id"),
+            "episode_filename": info.get("episode_filename"),
+            "judge_model": self.judge_model,
+        }
+        self._focus_stream.write(json.dumps(header, ensure_ascii=False, default=str) + "\n")
+        self._focus_stream.flush()
+        return self._focus_stream
+
+    def _write_focus_candidate(
+        self,
+        index: int,
+        candidate: Dict[str, Any],
+        tags: List[str],
+    ) -> None:
+        stream = self._ensure_focus_stream(candidate)
+        if stream is None:
+            return
+        if index in self._focus_written_indices:
+            return
+        payload = {
+            "record_type": "focus_transition",
+            "analysis_tags": sorted(set(tags)),
+            **candidate,
+        }
+        stream.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+        stream.flush()
+        self._focus_written_indices.add(index)
+
+    def _capture_focus_transition(
+        self,
+        index: int,
+        candidate: Dict[str, Any],
+        info: Dict[str, Any],
+        done: bool,
+    ) -> None:
+        if not self.analysis_focus_export_enabled:
+            return
+        planning_step = self._info_planning_step_count(info)
+        progress = self._info_progress(info)
+        success = self._safe_float(info.get("task_state_success"), 0.0)
+        replan_anchor = (
+            self._focus_previous_planning_step is not None
+            and planning_step != self._focus_previous_planning_step
+        )
+        progress_event = (
+            self.analysis_export_keep_progress_transitions
+            and self._focus_previous_progress is not None
+            and abs(progress - self._focus_previous_progress)
+            > self.analysis_export_progress_delta_threshold
+        )
+        success_event = (
+            self.analysis_export_keep_success_transition
+            and self._focus_previous_success is not None
+            and success != self._focus_previous_success
+        )
+        response_event = bool(
+            self.analysis_export_keep_response_transitions
+            and self._recent_response_text(info)
+        )
+
+        if index == 0 and self.analysis_export_keep_first_last:
+            self._write_focus_candidate(index, candidate, ["episode_start"])
+        if replan_anchor:
+            if self.analysis_replan_pre_sim_steps > 0:
+                for previous_index, previous in self._focus_recent:
+                    self._write_focus_candidate(
+                        previous_index,
+                        previous,
+                        ["replan_pre_window"],
+                    )
+            self._write_focus_candidate(index, candidate, ["replan_anchor"])
+            self._focus_post_remaining = self.analysis_replan_post_sim_steps
+        elif self._focus_post_remaining > 0:
+            self._write_focus_candidate(index, candidate, ["replan_post_window"])
+            self._focus_post_remaining -= 1
+
+        event_tags = []
+        if progress_event:
+            event_tags.append("progress_change")
+        if success_event:
+            event_tags.append("success_change")
+        if response_event:
+            event_tags.append("response_event")
+        if event_tags:
+            self._write_focus_candidate(index, candidate, event_tags)
+        if done and self.analysis_export_keep_first_last:
+            self._write_focus_candidate(index, candidate, ["episode_end"])
+
+        self._focus_recent.append((index, candidate))
+        self._focus_last_candidate = (index, candidate)
+        self._focus_previous_planning_step = planning_step
+        self._focus_previous_progress = progress
+        self._focus_previous_success = success
+
+    def _close_focus_stream(self, *, write_episode_end: bool = True) -> None:
+        if (
+            write_episode_end
+            and self.analysis_export_keep_first_last
+            and self._focus_last_candidate is not None
+        ):
+            index, candidate = self._focus_last_candidate
+            self._write_focus_candidate(index, candidate, ["episode_end"])
+        if self._focus_stream is not None:
+            self._focus_stream.flush()
+            self._focus_stream.close()
+            self._focus_stream = None
+
+    def _load_focus_candidates(self) -> Dict[int, Dict[str, Any]]:
+        """Read the bounded rich-state sample back only when analysis needs it."""
+        if not self.last_focus_export_path or not os.path.isfile(
+            self.last_focus_export_path
+        ):
+            return {}
+        records: Dict[int, Dict[str, Any]] = {}
+        try:
+            with open(self.last_focus_export_path, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    try:
+                        payload = json.loads(line)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    if payload.get("record_type") != "focus_transition":
+                        continue
+                    index = self._safe_int(payload.get("transition_index"), -1)
+                    if index >= 0:
+                        records[index] = payload
+        except (OSError, UnicodeError):
+            logger.warning(
+                "Unable to read critic focus stream: %s",
+                self.last_focus_export_path,
+            )
+        return records
 
     def _get_current_episode(self) -> Optional[Any]:
         if self.env_interface is None:
@@ -1076,6 +1508,8 @@ class A2CCritic(BaseCritic):
         self,
         transitions: List[Dict[str, Any]],
         td_errors: np.ndarray,
+        *,
+        include_full_trajectory: Optional[bool] = None,
     ) -> Tuple[List[int], Dict[int, List[str]], Dict[str, Any]]:
         tags_by_index: Dict[int, set] = {}
         total_transitions = len(transitions)
@@ -1095,6 +1529,15 @@ class A2CCritic(BaseCritic):
         self._add_progress_and_response_tags(transitions, tags_by_index)
         self._add_td_error_tags(td_errors, tags_by_index)
 
+        full_trajectory = (
+            self.analysis_export_full_trajectory
+            if include_full_trajectory is None
+            else bool(include_full_trajectory)
+        )
+        if full_trajectory:
+            for index in range(total_transitions):
+                tags_by_index.setdefault(index, set()).add("stability_trajectory")
+
         selected_items = sorted(
             tags_by_index.items(),
             key=lambda item: (
@@ -1102,7 +1545,10 @@ class A2CCritic(BaseCritic):
                 item[0],
             ),
         )
-        if len(selected_items) > self.analysis_export_max_selected_transitions:
+        if (
+            not full_trajectory
+            and len(selected_items) > self.analysis_export_max_selected_transitions
+        ):
             selected_items = selected_items[: self.analysis_export_max_selected_transitions]
 
         tags_output = {
@@ -1122,6 +1568,7 @@ class A2CCritic(BaseCritic):
             "replan_pre_sim_steps": self.analysis_replan_pre_sim_steps,
             "replan_post_sim_steps": self.analysis_replan_post_sim_steps,
             "max_selected_transitions": self.analysis_export_max_selected_transitions,
+            "full_stability_trajectory": full_trajectory,
         }
         return list(tags_output.keys()), tags_output, summary
 
@@ -1144,21 +1591,32 @@ class A2CCritic(BaseCritic):
         transitions: List[Dict[str, Any]],
         selected_indices: List[int],
         tags_by_index: Dict[int, List[str]],
+        focus_records: Optional[Mapping[int, Dict[str, Any]]] = None,
     ) -> List[Tuple[Any, Any, float, Any, bool, int, int, str]]:
         trajectory: List[Tuple[Any, Any, float, Any, bool, int, int, str]] = []
+        focus_records = focus_records or {}
         for index in selected_indices:
             transition = transitions[index]
             info = transition.get("info", {}) or {}
+            focused = focus_records.get(index, {}) or {}
+            state_artifacts = focused.get("state_artifacts") or transition.get(
+                "state_artifacts", {}
+            )
+            next_state_artifacts = focused.get(
+                "next_state_artifacts"
+            ) or transition.get("next_state_artifacts", {})
             state_desc = (
-                transition.get("state_artifacts", {}).get("text_desc")
+                state_artifacts.get("text_desc")
                 or self.state_encoder._generate_state_description(
-                    transition.get("state_world") or {}
+                    focused.get("state") or transition.get("state_world") or {}
                 )
             )
             next_state_desc = (
-                transition.get("next_state_artifacts", {}).get("text_desc")
+                next_state_artifacts.get("text_desc")
                 or self.state_encoder._generate_state_description(
-                    transition.get("next_state_world") or {}
+                    focused.get("next_state")
+                    or transition.get("next_state_world")
+                    or {}
                 )
             )
             event_tags = tags_by_index.get(index, [])
@@ -1208,7 +1666,7 @@ class A2CCritic(BaseCritic):
         next_value_features: Optional[np.ndarray] = None,
         analysis_tags: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        satisfied, total = self.state_encoder._extract_proposition_progress(info)
+        proposition_outcome = proposition_outcome_from_info(info)
         feature_names = artifacts.get("feature_names", [])
         export_world_state = self._export_world_state_snapshot(world_state)
         export_info = self._export_info_snapshot(info)
@@ -1247,7 +1705,7 @@ class A2CCritic(BaseCritic):
             if isinstance(info, dict)
             else 0.0,
             "proposition_satisfied_fraction": (
-                float(satisfied / max(total, 1)) if total > 0 else 0.0
+                proposition_outcome.fraction
             ),
             "gae_advantage": gae_advantage,
             "return_target": return_target,
@@ -1301,6 +1759,7 @@ class A2CCritic(BaseCritic):
         next_value_features: np.ndarray,
         advantages: np.ndarray,
         returns: np.ndarray,
+        focus_records: Optional[Mapping[int, Dict[str, Any]]] = None,
     ) -> None:
         if len(transitions) == 0:
             return
@@ -1323,8 +1782,10 @@ class A2CCritic(BaseCritic):
             td_errors,
         )
         records: List[Dict[str, Any]] = []
+        focus_records = focus_records or {}
         for index in selected_indices:
             transition = transitions[index]
+            focused = focus_records.get(index, {}) or {}
             reward_env = float(transition["reward_env"])
             reward_shaped = float(transition["reward_shaped"])
             done = bool(transition["done"])
@@ -1338,8 +1799,10 @@ class A2CCritic(BaseCritic):
                 reward_shaped=reward_shaped,
                 done=done,
                 info=transition["info"],
-                artifacts=transition["state_artifacts"],
-                world_state=transition.get("state_world"),
+                artifacts=focused.get("state_artifacts")
+                or transition["state_artifacts"],
+                world_state=focused.get("state")
+                or transition.get("state_world"),
                 value_features=value_features[index],
                 gae_advantage=float(advantages[index]),
                 return_target=float(returns[index]),
@@ -1360,8 +1823,10 @@ class A2CCritic(BaseCritic):
                         reward_shaped=reward_shaped,
                         done=done,
                         info=transition["info"],
-                        artifacts=transition["next_state_artifacts"],
-                        world_state=transition.get("next_state_world"),
+                        artifacts=focused.get("next_state_artifacts")
+                        or transition["next_state_artifacts"],
+                        world_state=focused.get("next_state")
+                        or transition.get("next_state_world"),
                         value_features=next_value_features[index],
                         analysis_tags=tags_by_index.get(index, []),
                     )
@@ -1382,12 +1847,16 @@ class A2CCritic(BaseCritic):
             "analysis_export_size_target": self.analysis_export_size_target,
             "gamma": self.gamma,
             "gae_lambda": self.gae_lambda,
+            "critic_phase": self.phase,
+            "judge_model": self.judge_model,
+            "state_encoder_id": self.state_encoder_id,
+            "value_checkpoint_id": self.value_checkpoint_id,
+            "reward_shaper_valid": bool(self.reward_shaper_valid),
+            "critic_lifecycle_valid": bool(self.critic_lifecycle_valid),
             "export_manifest": self._analysis_export_manifest(),
             "selection_summary": selection_summary,
-            "feature_schema": {
-                "feature_names": transitions[0]["state_artifacts"].get("feature_names", []),
-                "feature_categories": transitions[0]["state_artifacts"].get("feature_categories", []),
-            },
+            "focus_export_path": self.last_focus_export_path,
+            "feature_schema": dict(self._episode_feature_schema),
             "records": records,
         }
         episode_filename = transitions[0]["info"].get("episode_filename", "episode")
@@ -1447,11 +1916,16 @@ class A2CCritic(BaseCritic):
             reward: Environment reward
             next_state: Next world_state_dict
             done: Episode termination flag
-            info: Additional info (must contain task_instruction for LLM)
+            info: Additional info. ``task_instruction`` remains the
+                planner-visible compatibility field; ``reward_instruction``
+                carries the canonical goal for reward shaping.
         """
         # Apply LLM reward shaping if enabled
         if self.reward_shaper:
-            task_instruction = info.get("task_instruction", "")
+            reward_instruction = info.get(
+                "reward_instruction",
+                info.get("canonical_instruction", info.get("task_instruction", "")),
+            )
 
             # Enhance info with planning step context for LLM reward shaper
             enhanced_info = dict(info) if info else {}
@@ -1475,8 +1949,19 @@ class A2CCritic(BaseCritic):
                         enhanced_info['last_replan_sim_step'] = getattr(rebound_mgr, 'last_replan_sim_step', 0)
 
             shaped_reward = self.reward_shaper.shape_reward(
-                state, action, next_state, reward, task_instruction, enhanced_info
+                state,
+                action,
+                next_state,
+                reward,
+                reward_instruction,
+                enhanced_info,
             )
+            self.reward_shaper_valid = bool(
+                self.reward_shaper_valid
+                and getattr(self.reward_shaper, "valid", True)
+            )
+            if not self.reward_shaper_valid:
+                self.critic_lifecycle_valid = False
         else:
             shaped_reward = reward
 
@@ -1489,9 +1974,29 @@ class A2CCritic(BaseCritic):
         next_state_vec = self.state_encoder.encode(next_state, next_state_info)
         next_state_artifacts = self._copy_encode_artifacts()
 
-        # Store only compact post-encoding state snapshots in the episode buffer.
-        state_world = self._buffer_world_state_snapshot(state)
-        next_state_world = self._buffer_world_state_snapshot(next_state)
+        compact_info = self._compact_transition_info(info)
+        transition_index = len(self.buffer)
+        focus_candidate = self._focus_candidate(
+            transition_index=transition_index,
+            action=action,
+            reward_env=float(reward),
+            reward_shaped=float(shaped_reward),
+            done=bool(done),
+            info=compact_info,
+            state=state,
+            next_state=next_state,
+            state_artifacts=state_artifacts,
+            next_state_artifacts=next_state_artifacts,
+        )
+        self._capture_focus_transition(
+            transition_index,
+            focus_candidate,
+            compact_info,
+            bool(done),
+        )
+
+        # The exact numerical trajectory stays in memory for TD/GAE. Rich state,
+        # text and tracker payloads are sampled into the on-disk focus stream.
         self.buffer.append(
             {
                 "state_vec": state_vec.detach().cpu(),
@@ -1500,11 +2005,13 @@ class A2CCritic(BaseCritic):
                 "reward_shaped": float(shaped_reward),
                 "next_state_vec": next_state_vec.detach().cpu(),
                 "done": bool(done),
-                "info": dict(info) if info else {},
-                "state_world": state_world,
-                "next_state_world": next_state_world,
-                "state_artifacts": state_artifacts,
-                "next_state_artifacts": next_state_artifacts,
+                "info": compact_info,
+                "state_world": None,
+                "next_state_world": None,
+                "state_artifacts": self._compact_encode_artifacts(state_artifacts),
+                "next_state_artifacts": self._compact_encode_artifacts(
+                    next_state_artifacts
+                ),
                 "task_family": task_family,
             }
         )
@@ -1515,6 +2022,7 @@ class A2CCritic(BaseCritic):
 
     def reset(self) -> None:
         """Reset Critic state for new episode."""
+        self._close_focus_stream(write_episode_end=False)
         self.buffer = []
         self.raw_states = []
         self.last_episode_value_history = []
@@ -1524,6 +2032,16 @@ class A2CCritic(BaseCritic):
         self.last_episode_stability_trace_summary = {}
         self.last_analysis_path = None
         self.last_export_path = None
+        self.last_focus_export_path = None
+        self._episode_feature_schema = {}
+        self._focus_recent.clear()
+        self._focus_stream_path = None
+        self._focus_written_indices.clear()
+        self._focus_previous_planning_step = None
+        self._focus_previous_progress = None
+        self._focus_previous_success = None
+        self._focus_post_remaining = 0
+        self._focus_last_candidate = None
 
     def force_end_episode(self) -> None:
         """
@@ -1557,6 +2075,7 @@ class A2CCritic(BaseCritic):
         if len(self.buffer) == 0:
             logger.warning("Empty buffer in _process_episode, skipping")
             return
+        self._close_focus_stream()
 
         # Unpack buffer
         states = torch.stack([transition["state_vec"] for transition in self.buffer]).to(
@@ -1631,15 +2150,19 @@ class A2CCritic(BaseCritic):
         selected_indices, tags_by_index, _ = self._select_analysis_indices(
             self.buffer,
             td_errors,
+            include_full_trajectory=False,
         )
+        focus_records = self._load_focus_candidates()
         self.raw_states = self._build_offline_trajectory(
             self.buffer,
             selected_indices,
             tags_by_index,
+            focus_records,
         )
 
         # Update value network
-        self._update_value_network(states, returns)
+        if self.update_value_network:
+            self._update_value_network(states, returns)
         self._export_episode_analysis(
             transitions=self.buffer,
             values=values,
@@ -1648,11 +2171,15 @@ class A2CCritic(BaseCritic):
             next_value_features=next_value_features,
             advantages=advantages,
             returns=returns,
+            focus_records=focus_records,
         )
 
         # Run LLM offline analysis (if enabled)
         if self.offline_analyzer and len(self.raw_states) > 0:
-            task_instruction = infos[0].get("task_instruction", "")
+            # Offline behavioural analysis follows the policy-visible task.
+            task_instruction = infos[0].get(
+                "policy_instruction", infos[0].get("task_instruction", "")
+            )
             success = infos[-1].get("task_state_success", False)
             percent_complete = infos[-1].get("task_percent_complete", 0.0)
             total_reward = sum(rewards)
@@ -1702,6 +2229,9 @@ class A2CCritic(BaseCritic):
         # Clear buffers
         self.buffer = []
         self.raw_states = []
+        self._focus_recent.clear()
+        self._focus_written_indices.clear()
+        self._focus_last_candidate = None
 
     def _compute_stability_trace_summary(
         self,

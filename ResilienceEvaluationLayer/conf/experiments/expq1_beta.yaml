@@ -1,13 +1,18 @@
 # @package _global_
 
 defaults:
-  - /baselines/qwen35_centralized_zero_shot_react_summary_vllm_state
+  - /baselines/qwen3_centralized_zero_shot_react_summary_vllm_state
   - /evaluation/resilience_config
   - _self_
 
 evaluation:
   max_episode_sim_steps: 18000
+  adca:
+    llm_model: "gpt-5.1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
   critic:
+    llm_model: "gpt-5.1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
     # Keep the value/TD/GAE trace deterministic; otherwise dropout noise can
     # be mistaken for execution instability.
     inference_mode: "deterministic"
@@ -20,7 +25,7 @@ evaluation:
     stability_oscillation_component_weights: [1.0, 1.0, 1.0, 0.25]
 
 expq1:
-  output_subdir: "expq1_beta"
+  output_subdir: "expq1_beta_qwen3"
   baseline_model: "baselines/qwen3_centralized_zero_shot_react_summary_vllm_state"
   optimized_model: null
   shared:
@@ -30,12 +35,9 @@ expq1:
         stability:
           perturbation_norm_epsilon: 1.0e-6
         beta:
-          # Formal beta-stability for Q1-3: combine critic trajectory
-          # oscillation with output/action variation. The perturbation-specific
-          # aggregate is the paper-facing comparison across rewrite types.
+          # Eq. (6) beta uses the stage-Mahalanobis trajectory loss only.
+          # Output/action sensitivities remain support diagnostics.
           alpha: 0.5
-          weight_vv: 0.6
-          weight_out: 0.4
           perturbation_norm_epsilon: 1.0e-6
           include_rebound: false
         stage_baseline:
@@ -53,7 +55,7 @@ expq1:
       argument: "Validate beta-stability as execution oscillation sensitivity under semantically equivalent perturbations, with action/progress/success changes as support evidence."
       headline_metric: "stability_beta_perturbation"
       support_metrics:
-        - "stability_beta_perturbation_vv"
+        - "stability_beta_perturbation_trajectory"
         - "stability_beta_perturbation_out"
         - "stability_beta_perturbation_oscillation"
         - "stability_beta_perturbation_action"
@@ -62,7 +64,7 @@ expq1:
         - "stability_beta_perturbation_valid"
         - "stability_beta_neighborhood"
         - "stability_beta_out"
-        - "stability_beta_vv"
+        - "stability_beta_trajectory"
         - "stability_beta_oscillation"
         - "stability_beta_action"
         - "stability_beta_progress"
@@ -77,6 +79,7 @@ expq1:
         - "stability_oscillation_loss_valid"
         - "stability_critic_trace_len"
         - "stability_value_delta_variance"
+        - "sim_step_count"
         - "replanning_count_0"
         - "replanning_count_1"
         - "task_percent_complete"
@@ -86,7 +89,7 @@ expq1:
       summary_group_keys: ["condition_name", "perturbation_type", "perturbation_intensity"]
       summary_metrics:
         - "stability_beta_perturbation"
-        - "stability_beta_perturbation_vv"
+        - "stability_beta_perturbation_trajectory"
         - "stability_beta_perturbation_out"
         - "stability_beta_perturbation_oscillation"
         - "stability_beta_perturbation_action"
@@ -94,7 +97,7 @@ expq1:
         - "stability_beta_perturbation_success"
         - "stability_beta_perturbation_valid"
         - "stability_beta_neighborhood"
-        - "stability_beta_vv"
+        - "stability_beta_trajectory"
         - "stability_beta_out"
         - "stability_beta_oscillation"
         - "stability_beta_action"
@@ -109,6 +112,7 @@ expq1:
         - "stability_oscillation_loss_valid"
         - "stability_critic_trace_len"
         - "stability_value_delta_variance"
+        - "sim_step_count"
         - "replanning_count_0"
         - "replanning_count_1"
         - "task_percent_complete"

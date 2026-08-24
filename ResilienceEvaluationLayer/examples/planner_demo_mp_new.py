@@ -8,15 +8,14 @@ import os
 # Fix for huggingface/tokenizers parallelism issue in multiprocessing
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-import csv
 import sys
 import time
 import os
 import traceback
 import json
-import shutil
 import subprocess
 import gc
+import copy
 import torch
 from omegaconf import OmegaConf
 
@@ -27,7 +26,7 @@ sys.path.append("..")
 
 import hydra
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from torch import multiprocessing as mp
 
@@ -36,6 +35,10 @@ from habitat_llm.agent.env.evaluation.evaluation_functions import (
 )
 
 from habitat_llm.utils import cprint, setup_config, fix_config
+from habitat_llm.config_redaction import (
+    redacted_config_yaml,
+    write_redacted_config_copy,
+)
 
 
 from habitat_llm.agent.env import (
@@ -50,6 +53,21 @@ from habitat_llm.evaluation import (
     DecentralizedEvaluationRunner,
     EvaluationRunner,
 )
+from habitat_llm.evaluation.reporting import (
+    append_csv_rows,
+    build_episode_csv_metrics as _build_episode_csv_metrics,
+    collect_episode_stats_keys as _collect_episode_stats_keys,
+    primary_display_items,
+    read_csv_rows,
+    write_csv_rows_exact,
+)
+from habitat_llm.examples.resilience_scheduler import (
+    BatchExecutionError,
+    BatchRun,
+    ExecutionSettings,
+    create_attempt_dir,
+    run_bounded_jobs,
+)
 # Use new planner-based evolution modules
 from habitat_llm.planner.evolve import (
     EvolutionContextManager,
@@ -62,128 +80,9 @@ from habitat_llm.agent.env.dataset import CollaborationDatasetV0
 from habitat_baselines.utils.info_dict import extract_scalars_from_info
 
 
-EPISODE_CANONICAL_METRIC_KEYS = [
-    # Rebound
-    "rebound_c_rec",
-    "rebound_c_rec_cog",
-    "rebound_c_rec_phy",
-    "rebound_c_rec_state_debt",
-    "rebound_c_rec_plan",
-    "rebound_c_rec_sim",
-    "rebound_num_recovery_windows",
-    "rebound_raw_window_count",
-    "rebound_formal_window_count",
-    "rebound_skipped_window_count",
-    "rebound_c_rec_valid",
-    "rebound_c_rec_missing_reason",
-    "rebound_baseline_match_level",
-    "rebound_w_rem_star",
-    "rebound_g_rec_total",
-    "rebound_baseline_loaded",
-    "rebound_tracker_window_count",
-    "rebound_tracker_window_open_final",
-    # Stability
-    "stability_beta",
-    "stability_beta_neighborhood",
-    "stability_beta_vv",
-    "stability_beta_out",
-    "stability_beta_oscillation",
-    "stability_beta_action",
-    "stability_beta_progress",
-    "stability_beta_success",
-    "stability_beta_perturbation",
-    "stability_beta_perturbation_vv",
-    "stability_beta_perturbation_out",
-    "stability_beta_perturbation_oscillation",
-    "stability_beta_perturbation_action",
-    "stability_beta_perturbation_progress",
-    "stability_beta_perturbation_success",
-    "stability_beta_perturbation_valid",
-    "stability_beta_perturbation_scope",
-    "stability_clean_ref_valid",
-    "stability_clean_ref_strategy",
-    "stability_n_clean_ref",
-    "stability_beta_neighborhood_valid",
-    "stability_beta_neighborhood_missing_reason",
-    "stability_beta_scope",
-    "stability_p_cbf",
-    "stability_td_error_mean_abs",
-    "stability_td_error_p95_abs",
-    "stability_gae_mean_abs",
-    "stability_gae_p95_abs",
-    "stability_return_target_variance",
-    "stability_oscillation_loss",
-    "stability_oscillation_loss_valid",
-    "stability_oscillation_source",
-    "stability_critic_trace_len",
-    "stability_value_delta_variance",
-    # Degradation / Graceful Extensibility
-    "degradation_auc_loss",
-    "degradation_p_cliff",
-    "degradation_l_bd",
-    "ge_contract_margin_min",
-    "ge_audc_f",
-    "ge_cell_valid",
-    "ge_cell_missing_reason",
-    "ge_valid_lambda_coverage",
-    "ge_boundary_lambda_star",
-    "ge_boundary_hit",
-    "ge_hard_boundary_hit",
-]
-EPISODE_COMPAT_ALIAS_KEYS = []
-EPISODE_DYNAMIC_PREFIXES = ()
-
-
-def _collect_episode_stats_keys(info: Dict[str, Any]) -> set:
-    stats_keys = {
-        "task_percent_complete",
-        "task_state_success",
-        "proposition_satisfied_fraction",
-        "sim_step_count",
-        "replanning_count",
-        "runtime",
-    }
-    stats_keys.update(EPISODE_CANONICAL_METRIC_KEYS)
-    stats_keys.update(EPISODE_COMPAT_ALIAS_KEYS)
-
-    if "replanning_count" in info and isinstance(info["replanning_count"], dict):
-        for agent_id, replan_count in info["replanning_count"].items():
-            stats_keys.add(f"replanning_count_{agent_id}")
-            info[f"replanning_count_{agent_id}"] = replan_count
-
-    if EPISODE_DYNAMIC_PREFIXES:
-        for key in list(info.keys()):
-            if key.startswith(EPISODE_DYNAMIC_PREFIXES):
-                stats_keys.add(key)
-
-    return stats_keys
-
-
-def _build_episode_csv_metrics(
-    stats_episode: Dict[str, Any],
-    info: Dict[str, Any],
-) -> Dict[str, Any]:
-    csv_metrics = dict(stats_episode)
-
-    for key in EPISODE_CANONICAL_METRIC_KEYS + EPISODE_COMPAT_ALIAS_KEYS:
-        value = info.get(key)
-        csv_metrics[key] = "" if value is None else value
-
-    for key in ("proposition_satisfied_fraction", "task_family", "action_sequence"):
-        value = info.get(key)
-        if value is not None:
-            csv_metrics[key] = value
-
-    return csv_metrics
-
-
 def clear_memory():
-    """Clear Python and PyTorch memory cache"""
+    """Release cyclic Python objects between Habitat episodes."""
     gc.collect()
-    return
-    # if torch.cuda.is_available():
-    #     torch.cuda.empty_cache()
-    #     torch.cuda.synchronize()
 
 
 def get_output_file(config, env_interface):
@@ -202,31 +101,13 @@ def get_output_file(config, env_interface):
 # Function to write data to the CSV file
 def write_to_csv(file_name, result_dict):
     result_dict = dict(sorted(result_dict.items()))
-    os.makedirs(os.path.dirname(file_name), exist_ok=True)
-
-    existing_fieldnames: List[str] = []
-    existing_rows: List[Dict[str, Any]] = []
-    if os.path.exists(file_name) and os.path.getsize(file_name) > 0:
-        with open(file_name, mode="r", newline="") as file:
-            reader = csv.DictReader(file)
-            existing_fieldnames = list(reader.fieldnames or [])
-            if existing_fieldnames:
-                existing_rows = list(reader)
-
-    if existing_fieldnames and set(result_dict.keys()).issubset(existing_fieldnames):
-        fieldnames = existing_fieldnames
-        with open(file_name, mode="a", newline="") as file:
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
-            writer.writerow({key: result_dict.get(key, "") for key in fieldnames})
-        return
-
-    fieldnames = sorted(set(existing_fieldnames) | set(result_dict.keys()))
-    with open(file_name, mode="w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in existing_rows:
-            writer.writerow({key: row.get(key, "") for key in fieldnames})
-        writer.writerow({key: result_dict.get(key, "") for key in fieldnames})
+    append_csv_rows(
+        file_name,
+        [result_dict],
+        fieldnames=list(result_dict),
+        schema_policy="expand",
+        empty_policy="error",
+    )
 
 
 def save_exception_message(config, env_interface):
@@ -250,7 +131,7 @@ def write_config(config):
     output_file = os.path.join(config.paths.results_dir, dataset_file)
     os.makedirs(output_file, exist_ok=True)
     with open(f"{output_file}/config.yaml", "w+") as f:
-        f.write(OmegaConf.to_yaml(config))
+        f.write(redacted_config_yaml(config))
 
     # Copy over the RLM config
     planner_configs = []
@@ -273,8 +154,9 @@ def write_config(config):
             if len(yaml_rlm_path) > 0:
                 yaml_rlm_file = f"{yaml_rlm_path}/config.yaml"
                 if os.path.isfile(yaml_rlm_file):
-                    shutil.copy(
-                        yaml_rlm_file, f"{output_file}/config_rlm{suffix_rlm}.yaml"
+                    write_redacted_config_copy(
+                        yaml_rlm_file,
+                        f"{output_file}/config_rlm{suffix_rlm}.yaml",
                     )
 
 
@@ -304,6 +186,286 @@ def _select_episode_subset(dataset: CollaborationDatasetV0, config) -> Collabora
         return CollaborationDatasetV0(config=config.habitat.dataset, episodes=episode_subset)
 
     return dataset
+
+
+def _mp_execution_settings(config, requested_workers: int) -> ExecutionSettings:
+    raw = OmegaConf.select(config, "resilience.execution")
+    mapping: Dict[str, Any] = {}
+    if raw is not None:
+        converted = OmegaConf.to_container(raw, resolve=True)
+        if isinstance(converted, dict):
+            mapping = converted
+    configured = ExecutionSettings.from_mapping(mapping)
+    return ExecutionSettings(
+        max_parallel_workers=min(
+            max(1, requested_workers), configured.max_parallel_workers
+        ),
+        episodes_per_worker=1,
+        min_available_memory_gb=configured.min_available_memory_gb,
+    )
+
+
+def _write_rows_exact(
+    path: Path,
+    rows: List[Dict[str, Any]],
+    *,
+    empty_fieldnames: Optional[Sequence[str]] = None,
+) -> None:
+    fieldnames = (
+        sorted({str(key) for row in rows for key in row})
+        if rows
+        else [str(key) for key in empty_fieldnames or ()]
+    )
+    write_csv_rows_exact(
+        path,
+        rows,
+        fieldnames=fieldnames,
+        overwrite_policy="replace",
+        empty_policy="write_header" if fieldnames else "error",
+    )
+
+
+def _read_csv_rows(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        raise FileNotFoundError(path)
+    return list(read_csv_rows(path))
+
+
+def _numeric_episode_metrics(row: Dict[str, Any]) -> Dict[str, float]:
+    excluded = {
+        "episode_id",
+        "instruction",
+        "run_id",
+        "task_family",
+        "action_sequence",
+    }
+    metrics: Dict[str, float] = {}
+    for key, value in row.items():
+        if key in excluded or value in (None, ""):
+            continue
+        try:
+            metrics[key] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return metrics
+
+
+def _write_mp_execution_manifest(
+    output_path: Path,
+    report: BatchRun,
+    settings: ExecutionSettings,
+    metadata: Dict[str, Dict[str, Any]],
+) -> None:
+    status_counts = {
+        outcome_status: sum(
+            1 for outcome in report.outcomes if outcome.status == outcome_status
+        )
+        for outcome_status in ("completed", "failed", "not_started")
+    }
+    batch_status = (
+        "failed"
+        if status_counts["not_started"]
+        else "completed_with_failures"
+        if status_counts["failed"]
+        else "completed"
+    )
+    failed_episode_ids = [
+        str(episode_id)
+        for outcome in report.outcomes
+        if outcome.status == "failed"
+        for episode_id in metadata.get(outcome.job_id, {}).get("episode_ids", [])
+    ]
+    jobs = []
+    for outcome in report.outcomes:
+        job = dict(metadata.get(outcome.job_id, {}))
+        resource_path = Path(str(job.get("resource_usage_path", "")))
+        resource_usage = None
+        if resource_path.is_file():
+            try:
+                resource_usage = json.loads(resource_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                pass
+        jobs.append(
+            {
+                "job_id": outcome.job_id,
+                "status": outcome.status,
+                "error": outcome.error,
+                "started_at": outcome.started_at,
+                "finished_at": outcome.finished_at,
+                **job,
+                "resource_usage": resource_usage,
+            }
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(
+            {
+                "execution": {
+                    "max_parallel_workers": settings.max_parallel_workers,
+                    "episodes_per_worker": 1,
+                    "min_available_memory_gb": settings.min_available_memory_gb,
+                    "worker_failure_policy": "continue",
+                },
+                "status": batch_status,
+                "status_counts": status_counts,
+                "failed_episode_ids": failed_episode_ids,
+                "max_active_workers": report.max_active_workers,
+                "jobs": jobs,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _run_isolated_episode_batch(config, dataset: CollaborationDatasetV0) -> None:
+    """Run each selected episode in a process-isolated, bounded worker."""
+
+    requested_workers = int(config.get("num_proc", 1))
+    settings = _mp_execution_settings(config, requested_workers)
+    worker_root = Path(str(config.paths.results_dir)) / "mp_workers"
+    attempt_root = create_attempt_dir(worker_root)
+    attempt_id = attempt_root.name.removeprefix("attempt_")
+    jobs = []
+    metadata: Dict[str, Dict[str, Any]] = {}
+
+    for order, episode in enumerate(dataset.episodes):
+        episode_id = str(episode.episode_id)
+        worker_dir = attempt_root / f"episode_{episode_id}"
+        job_id = f"{attempt_id}::episode_{episode_id}"
+        payload = {
+            "order": order,
+            "episode_id": episode_id,
+            "worker_dir": worker_dir,
+        }
+        jobs.append((job_id, payload))
+        metadata[job_id] = {
+            "attempt_id": attempt_id,
+            "episode_ids": [episode_id],
+            "worker_dir": str(worker_dir),
+            "worker_log_path": str(worker_dir / "worker.log"),
+            "resource_usage_path": str(worker_dir / "resource_usage.json"),
+        }
+
+    def run_job(payload: Dict[str, Any]) -> Dict[str, Any]:
+        worker_dir = Path(payload["worker_dir"])
+        worker_dir.mkdir(parents=True, exist_ok=True)
+        worker_cfg = copy.deepcopy(config)
+        OmegaConf.set_struct(worker_cfg, False)
+        worker_cfg.num_proc = 1
+        for key in (
+            "episode_indices",
+            "evolve_episode_ids",
+            "start_index",
+            "end_index",
+        ):
+            if worker_cfg.get(key, None) is not None:
+                del worker_cfg[key]
+        worker_cfg.episode_ids = [payload["episode_id"]]
+        worker_cfg.paths.results_dir = str(worker_dir)
+        worker_cfg.paths.epi_result_file_path = str(worker_dir / "episode_metrics.csv")
+        worker_cfg.paths.run_result_file_path = str(worker_dir / "run_result_log.csv")
+        worker_cfg.paths.end_result_file_path = str(worker_dir / "end_result_log.csv")
+        config_path = worker_dir / "_resolved_config.yaml"
+        config_path.write_text(
+            redacted_config_yaml(worker_cfg, resolve=True, replacement=None),
+            encoding="utf-8",
+        )
+
+        command = [
+            sys.executable,
+            "-m",
+            "habitat_llm.examples.resilience_helpers",
+            "--spec-config",
+            str(config_path),
+            "--resource-usage",
+            str(worker_dir / "resource_usage.json"),
+        ]
+        with open(worker_dir / "worker.log", "w", encoding="utf-8") as worker_log:
+            result = subprocess.run(
+                command,
+                check=False,
+                stdout=worker_log,
+                stderr=subprocess.STDOUT,
+            )
+        csv_path = worker_dir / "episode_metrics.csv"
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"episode {payload['episode_id']} exited with code {result.returncode}"
+            )
+        if not csv_path.exists():
+            raise RuntimeError(f"episode {payload['episode_id']} produced no metrics CSV")
+        rows = _read_csv_rows(csv_path)
+        written_episode_ids = {
+            str(row.get("episode_id", "")) for row in rows
+        }
+        expected_episode_id = str(payload["episode_id"])
+        if not rows or written_episode_ids != {expected_episode_id}:
+            raise RuntimeError(
+                f"episode {expected_episode_id} produced unexpected metrics evidence: "
+                f"{sorted(written_episode_ids)}"
+            )
+        return {**payload, "csv_path": str(csv_path)}
+
+    try:
+        report = run_bounded_jobs(
+            jobs,
+            run_job,
+            settings,
+            continue_after_worker_failure=True,
+        )
+    except BatchExecutionError as exc:
+        _write_mp_execution_manifest(
+            worker_root / "execution_manifest.json",
+            exc.report,
+            settings,
+            metadata,
+        )
+        raise RuntimeError(
+            f"Episode worker batch failed; see {worker_root / 'execution_manifest.json'}"
+        ) from exc
+
+    ordered_results = sorted(
+        (
+            outcome.result
+            for outcome in report.outcomes
+            if outcome.status == "completed"
+        ),
+        key=lambda item: item["order"],
+    )
+    episode_rows: List[Dict[str, Any]] = []
+    for result in ordered_results:
+        episode_rows.extend(_read_csv_rows(Path(result["csv_path"])))
+    _write_rows_exact(
+        Path(str(config.paths.epi_result_file_path)),
+        episode_rows,
+        empty_fieldnames=("episode_id", "run_id", "instruction"),
+    )
+
+    stats_by_episode = {
+        f"{row.get('episode_id', 'unknown')}::{row.get('run_id', '0')}::{index}": (
+            _numeric_episode_metrics(row)
+        )
+        for index, row in enumerate(episode_rows)
+    }
+    aggregate = aggregate_measures(stats_by_episode) if stats_by_episode else {}
+    if aggregate:
+        cprint("Metrics Across Isolated Episode Workers:", "blue")
+        for key, value in primary_display_items(aggregate):
+            print(f"  {key}: {value}")
+        _write_rows_exact(Path(str(config.paths.run_result_file_path)), [aggregate])
+        _write_rows_exact(Path(str(config.paths.end_result_file_path)), [aggregate])
+
+    _write_mp_execution_manifest(
+        worker_root / "execution_manifest.json", report, settings, metadata
+    )
+    failed_count = sum(
+        1 for outcome in report.outcomes if outcome.status == "failed"
+    )
+    print(
+        f"Completed {len(episode_rows)} episode rows with {failed_count} failure(s) "
+        f"and at most {report.max_active_workers} isolated workers."
+    )
 
 
 # Method to load agent planner from the config
@@ -367,87 +529,17 @@ def run_eval(config):
         run_planner(config, dataset)
         return
 
-    num_episodes = len(dataset.episodes)
-    if config.num_proc == 1:
-        if (config.get("episode_indices", None) is not None or
-                config.get("episode_ids", None) is not None or
-                config.get("evolve_episode_ids", None) is not None):
-            if config.get("resume", False):
-                raise ValueError("episode selection and resume cannot be used together")
-            dataset = _select_episode_subset(dataset, config)
+    if (config.get("episode_indices", None) is not None or
+            config.get("episode_ids", None) is not None or
+            config.get("evolve_episode_ids", None) is not None):
+        if config.get("resume", False):
+            raise ValueError("episode selection and resume cannot be used together")
+        dataset = _select_episode_subset(dataset, config)
+
+    if int(config.get("num_proc", 1)) == 1:
         run_planner(config, dataset)
     else:
-        # Process episodes in parallel using subprocess to avoid memory leaks
-        # We launch separate python processes for each chunk
-        print(f"Launching {config.num_proc} subprocess workers...")
-        processes = []
-        ochunk_size = num_episodes // config.num_proc
-        
-        start = 0
-        for i in range(config.num_proc):
-            chunk_size = ochunk_size
-            if i < (num_episodes % config.num_proc):
-                chunk_size += 1
-            end = min(start + chunk_size, num_episodes)
-            
-            if start >= end:
-                break
-
-            # Construct command to run this script again with start/end indices
-            # We assume we are running the same script.
-            cmd = [
-                sys.executable,
-                "-m",
-                "habitat_llm.examples.planner_demo",
-                f"++start_index={start}",
-                f"++end_index={end}",
-            ]
-            
-            # Pass through all existing arguments, but filter out ones we don't want to duplicate or conflict
-            # This is a bit tricky with Hydra. We mainly want to pass the config name and overrides.
-            # A simpler way is to pass the same arguments but add ++start_index and ++end_index
-            # We iterate sys.argv to reconstruct the command
-            
-            # Helper to check if arg is start/end index
-            def is_index_arg(arg):
-                return "start_index" in arg or "end_index" in arg
-            
-            # Reconstruct args, excluding our internal worker flags if they were somehow present
-            base_args = [arg for arg in sys.argv[1:] if not is_index_arg(arg)]
-            
-            # Add config name if not in base_args (it usually is)
-            # Add overrides
-            final_cmd = cmd[:3] + base_args + cmd[3:]
-            
-            print(f"Starting worker {i}: indices {start}-{end}")
-            # print(f"Command: {' '.join(final_cmd)}")
-            
-            p = subprocess.Popen(final_cmd)
-            processes.append(p)
-            
-            start += chunk_size
-
-        # Wait for all processes to complete
-        for p in processes:
-            p.wait()
-            if p.returncode != 0:
-                print(f"Process {p.pid} failed with return code {p.returncode}")
-
-        # Aggregation logic would need to be updated to read from files
-        # Since each worker writes its own results, we can just aggregate at the end.
-        # But wait, the original code aggregated results from Pipes.
-        # Now workers write to disk independently.
-        # We need to run aggregation after all workers finish.
-        
-        # Re-read all stats files and aggregate
-        # Assuming workers wrote their results to the results directory.
-        # The original code did write_to_csv inside run_planner, so files are generated.
-        # We just need to aggregate the final metrics if needed.
-        # For now, we rely on the per-episode/run logs.
-        
-        # Recalculate aggregation from disk if possible, or just skip the "Metrics Across All Runs" print
-        # which might be acceptable for the demo improvement.
-        print("All workers completed.")
+        _run_isolated_episode_batch(config, dataset)
 
     e_t = time.time() - t0
     print(f"Time elapsed since start of experiment: {e_t} seconds.")
@@ -540,6 +632,7 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
                 kind=str(rp_dict.get("kind", "clean")),
                 seed=int(rp_dict.get("seed", 0)),
                 intensity=float(rp_dict.get("intensity", 1.0)),
+                extras=dict(rp_dict.get("extras", {}) or {}),
             )
             eval_runner.perturbation_injector = PerturbationInjector(spec=spec)
             cprint(
@@ -622,6 +715,7 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
         stats_episodes: Dict[str, Dict] = {
             str(i): {} for i in range(config.num_runs_per_episode)
         }
+        run_aggregates: Dict[str, Dict[str, float]] = {}
 
         num_episodes = len(env_interface.env.episodes)
         analysis_roots = resolve_analysis_roots(config, output_root)
@@ -637,6 +731,7 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
         )
 
         for run_id in range(config.num_runs_per_episode):
+            episode_failures: Dict[str, str] = {}
             
             # Check if evolution is enabled. If not, use standard sequential execution to avoid
             # simulator stability issues associated with manual episode injection.
@@ -693,8 +788,16 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
                         print("An error occurred while running the episode:", e)
                         print(f"Skipping evaluating episode: {episode_id}")
                         episode_error = str(e)
+                        episode_failures[episode_id_str] = (
+                            f"{type(e).__name__}: {e}"
+                        )
                         if config.evaluation.log_data:
                             save_exception_message(config, env_interface)
+                        if bool(config.get("fail_on_episode_error", False)):
+                            raise RuntimeError(
+                                f"Episode {episode_id_str} failed: "
+                                f"{type(e).__name__}: {e}"
+                            ) from e
 
                     try:
                         # Standard reset advances the internal iterator
@@ -798,8 +901,16 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
                             print("An error occurred while running the episode:", e)
                             print(f"Skipping evaluating episode: {episode_id}")
                             episode_error = str(e)
+                            episode_failures[episode_id_str] = (
+                                f"{type(e).__name__}: {e}"
+                            )
                             if config.evaluation.log_data:
                                 save_exception_message(config, env_interface)
+                            if bool(config.get("fail_on_episode_error", False)):
+                                raise RuntimeError(
+                                    f"Episode {episode_id_str} failed: "
+                                    f"{type(e).__name__}: {e}"
+                                ) from e
 
                         if evolution_manager.enabled:
                             summary = build_episode_summary(
@@ -831,8 +942,29 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
                     # Update Scheduler with results
                     scheduler.update_results(batch_results)
 
+            # A run with no completed episode must fail with the original
+            # episode context.  Writing an empty aggregate as ``[{}]`` would
+            # otherwise raise TabularSchemaError and mask the real failure.
+            completed_episode_metrics = stats_episodes[str(run_id)]
+            if not completed_episode_metrics:
+                failure_summary = "; ".join(
+                    f"{episode_id}={reason}"
+                    for episode_id, reason in sorted(episode_failures.items())
+                )
+                raise RuntimeError(
+                    f"Run {run_id} produced no completed episode metrics"
+                    + (f": {failure_summary}" if failure_summary else "")
+                )
+
             # aggregate metrics across the current run.
-            run_metrics = aggregate_measures(stats_episodes[str(run_id)])
+            run_metrics = aggregate_measures(completed_episode_metrics)
+            if not run_metrics:
+                raise RuntimeError(
+                    f"Run {run_id} completed episodes "
+                    f"{sorted(str(key) for key in completed_episode_metrics)} "
+                    "but produced no numeric metrics to aggregate"
+                )
+            run_aggregates[str(run_id)] = run_metrics
             eval_runner.print_primary_display_metrics(
                 f"Metrics For Run {run_id}:",
                 run_metrics,
@@ -844,9 +976,11 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
 
         # aggregate metrics across all runs.
         if conn is None:
-            all_metrics = aggregate_measures(
-                {run_id: aggregate_measures(v) for run_id, v in stats_episodes.items()}
-            )
+            all_metrics = aggregate_measures(run_aggregates)
+            if not all_metrics:
+                raise RuntimeError(
+                    "Completed runs produced no numeric experiment metrics"
+                )
             eval_runner.print_primary_display_metrics(
                 "Metrics Across All Runs:",
                 all_metrics,

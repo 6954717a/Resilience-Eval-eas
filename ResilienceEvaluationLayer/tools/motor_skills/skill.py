@@ -253,7 +253,7 @@ class SkillPolicy(Policy):
         # sim-handle of closest sim-object/furniture entity to non-privileged object/furniture entity respectively
         if entity.sim_handle is None:
             # find closest entity to assign as proxy sim-handle
-            # TODO: @zephirefaith :BE: is there a way to make following less brittle
+            # TODO: Replace this type-name check with an explicit capability.
             if type(self).__name__ == "PlaceSkillPolicy":
                 all_gt_entities = self.env.perception.gt_graph.get_all_nodes_of_type(
                     Furniture

@@ -253,7 +253,7 @@ class ADCAAnalyzer:
             "adca/total_steps": K
         }
 
-        # Cliff Detection (Degradation Metric)
+        # Cliff detection retained as an ADCA-local diagnostic.
         # Definition: Consistent GOOD performance followed by sudden failure (BAD)
         cliff_detected = False
         cliff_step = -1
@@ -271,4 +271,3 @@ class ADCAAnalyzer:
         stats["adca/cliff_step"] = cliff_step
 
         return advantages, stats
-

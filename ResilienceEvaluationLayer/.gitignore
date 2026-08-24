@@ -1,0 +1,32 @@
+# Local credentials and environment files
+api_key*.txt
+.env
+.env.*
+!.env.example
+credentials*.json
+service-account*.json
+*-service-account.json
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+
+# Python and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated runtime and evaluation artifacts
+*.log
+outputs/
+multirun/
+checkpoints/
+analyses/
+evaluation/stage_baselines/

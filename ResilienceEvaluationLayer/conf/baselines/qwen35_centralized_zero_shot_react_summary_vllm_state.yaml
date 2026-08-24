@@ -14,8 +14,6 @@ evaluation:
     stability:
       enabled: true
       use_saycan_scores: false
-    degradation:
-      enabled: true
 
   context_evolve:
     enabled: false
@@ -54,11 +52,13 @@ evaluation:
     analysis_export_include_feature_schema_per_record: false
     analysis_export_include_next_value_features: false
     analysis_export_dir: "./analyses/critic_exports"
+    analysis_focus_export_enabled: true
+    analysis_focus_dir: "./analyze"
     save_checkpoints: true
     checkpoint_dir: "./checkpoints"
     state_encoder:
       text_encoder:
-        model: "/XYFS02/HDD_POOL/nudt_fengdw/nudt_fengdw_2/lyp/model_cache/paraphrase-multilingual-MiniLM-L12-v2"
+        model: "${oc.env:TEXT_ENCODER_MODEL,sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}"
         local_files_only: true
         fallback: "hash"
       variants:

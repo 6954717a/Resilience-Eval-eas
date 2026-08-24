@@ -86,6 +86,7 @@ class WorldStateBuilder:
                     object_positions[obj.name] = {
                         "position": standard_pos,
                         "parent": self._resolve_object_parent_name(world_graph, obj),
+                        "aliases": self._spatial_aliases(obj),
                     }
 
                 seen_anchor_names = set()
@@ -108,7 +109,10 @@ class WorldStateBuilder:
                         if standard_pos is None:
                             continue
 
-                        furniture_positions[node_name] = {"position": standard_pos}
+                        furniture_positions[node_name] = {
+                            "position": standard_pos,
+                            "aliases": self._spatial_aliases(node),
+                        }
                         seen_anchor_names.add(node_name)
 
                 break
@@ -116,6 +120,24 @@ class WorldStateBuilder:
             logger.debug("Could not extract world graph state: %s", exc)
 
         return object_positions, furniture_positions
+
+    @staticmethod
+    def _spatial_aliases(node: Any) -> List[str]:
+        aliases = set()
+        name = getattr(node, "name", None)
+        if name:
+            aliases.add(str(name))
+        properties = getattr(node, "properties", {}) or {}
+        if isinstance(properties, dict):
+            for key in ("sim_handle", "handle", "region_id", "room_id"):
+                value = properties.get(key)
+                if value:
+                    aliases.add(str(value))
+        for attr in ("sim_handle", "handle", "region_id", "room_id"):
+            value = getattr(node, attr, None)
+            if value:
+                aliases.add(str(value))
+        return sorted(aliases)
 
     def _extract_agent_holdings(self) -> Dict[int, Dict[str, Optional[str]]]:
         agent_holdings: Dict[int, Dict[str, Optional[str]]] = {}
@@ -174,6 +196,8 @@ class WorldStateBuilder:
             "source_allowed_regions": [],
             "object_labels": {},
             "episode_object_states": {},
+            "placement_predicates": [],
+            "floor_target_rooms": [],
         }
 
         try:
@@ -226,6 +250,8 @@ class WorldStateBuilder:
         receptacles: set = set()
         rooms: set = set()
         entities: set = set()
+        placement_predicates: set = set()
+        floor_target_rooms: set = set()
 
         def _add_handles(target_set: set, handles: Any) -> None:
             if isinstance(handles, (list, tuple)):
@@ -237,11 +263,16 @@ class WorldStateBuilder:
 
         for proposition in propositions:
             args = getattr(proposition, "args", {}) or {}
+            predicate = str(getattr(proposition, "function_name", "") or "")
+            if predicate in {"is_on_top", "is_inside", "is_in_room", "is_on_floor"}:
+                placement_predicates.add(predicate)
             _add_handles(objects, args.get("object_handles"))
             _add_handles(receptacles, args.get("receptacle_handles"))
             _add_handles(rooms, args.get("room_ids"))
             _add_handles(entities, args.get("entity_handles_a"))
             _add_handles(entities, args.get("entity_handles_b"))
+            if predicate == "is_on_floor":
+                _add_handles(floor_target_rooms, args.get("room_ids"))
 
             star_args = args.get("*args")
             if isinstance(star_args, (list, tuple)):
@@ -253,6 +284,8 @@ class WorldStateBuilder:
         context["entity_handles"] = sorted(entities)
         context["rooms"] = sorted(rooms)
         context["proposition_count"] = len(propositions)
+        context["placement_predicates"] = sorted(placement_predicates)
+        context["floor_target_rooms"] = sorted(floor_target_rooms)
 
         world_graph = self._get_world_graph_for_context()
         if world_graph is not None:

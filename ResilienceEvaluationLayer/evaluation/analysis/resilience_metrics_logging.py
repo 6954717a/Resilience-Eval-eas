@@ -17,7 +17,7 @@ This module is deprecated and will be removed in a future version.
 Use dimension-based metrics from habitat_llm.evaluation.metrics instead:
 - Rebound metrics: habitat_llm.evaluation.metrics.rebound
 - Stability metrics: habitat_llm.evaluation.metrics.stability
-- Degradation metrics: habitat_llm.evaluation.metrics.degradation
+- Graceful Extensibility metrics: habitat_llm.evaluation.metrics.extensibility
 """
 
 import json

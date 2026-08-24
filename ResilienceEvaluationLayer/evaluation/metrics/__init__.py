@@ -5,29 +5,42 @@ The resilience evaluation stack is organized around three primary dimensions:
 
 1. Rebound: Recovery windows and formal recovery cost.
 2. Stability: Neighborhood consistency under perturbation.
-3. Graceful Extensibility: Family-level stress-response capacity.
+3. Boundary (GE): Family-level stress-response capacity.
 
-Legacy degradation metrics remain exported for backward compatibility, but the
-main narrative is now Rebound / Stability / Extensibility.
+There is no single-episode ``degradation`` dimension. GE derives curve
+degradation diagnostics from the multi-lambda margin, where they are actually
+identifiable.
 """
 
-from .degradation import DegradationCollector, DegradationMetrics, log_degradation_metrics
-from .extensibility import BoundarySweep, ContractMargin, MarginCollector, MarginThresholds
+from .collection import (
+    CollectorRegistry,
+    EpisodeCollectionContext,
+    EpisodeMetricCollector,
+)
+from .extensibility import (
+    BoundaryCollector,
+    BoundaryMargin,
+    BoundarySweep,
+    BoundaryThresholds,
+)
 from .rebound import ReboundCollector, ReboundMetrics, log_rebound_metrics
+from .statistical_baseline import MetricReference, StatisticalBaseline
 from .stability import StabilityCollector, StabilityMetrics, log_stability_metrics
 
 __all__ = [
+    "CollectorRegistry",
+    "EpisodeCollectionContext",
+    "EpisodeMetricCollector",
     "ReboundMetrics",
     "ReboundCollector",
     "log_rebound_metrics",
     "StabilityMetrics",
     "StabilityCollector",
     "log_stability_metrics",
-    "DegradationMetrics",
-    "DegradationCollector",
-    "log_degradation_metrics",
-    "ContractMargin",
-    "MarginThresholds",
-    "MarginCollector",
+    "BoundaryMargin",
+    "BoundaryThresholds",
+    "BoundaryCollector",
     "BoundarySweep",
+    "MetricReference",
+    "StatisticalBaseline",
 ]

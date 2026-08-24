@@ -14,8 +14,8 @@ expq2_outer:
   subexperiments:
     outer_stress_curve:
       enabled: true
-      argument: "外部压力逐步增大时，系统是平滑退化还是突然崩溃；GE 是主指标，Rebound/Stability 作为解释证据。"
-      headline_metric: "ge_contract_margin_min"
+      argument: "Evaluate whether performance degrades smoothly or fails abruptly as external stress increases, using GE as the primary metric and Rebound/Stability as supporting evidence."
+      headline_metric: "ge_boundary_lambda_star"
       support_metrics:
         - "ge_audc_f"
         - "rebound_c_rec"

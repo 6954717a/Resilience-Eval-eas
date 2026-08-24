@@ -7,9 +7,8 @@ defaults:
 evaluation:
   adca:
     enabled: true
-    # llm_model: "kimi-k2-0905-preview"
-    llm_model: "Qwen3.5-9B-YOYO-Instruct"
-    llm_base_url: "http://127.0.0.1:8000/v1"
+    llm_model: "gpt-5.6-sol"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
     adca_alpha: 1.0
     adca_fix_base: 0.2
     adca_orm_distribution: "last_step"
@@ -69,14 +68,15 @@ evaluation:
     # LLM integration
     use_llm_shaping: true
     use_llm_offline: true
-    shaping_weight: 0.7 # LLM评估的Reward影响
+    shaping_weight: 0.7
     llm_call_frequency: 5
     # llm_model: "kimi-k2-0905-preview" # Check available models
-    llm_model: "Qwen3.5-9B-YOYO-Instruct"
+    llm_model: "gpt-5.6-sol"
     cache_size: 1000
     
     # Custom API Configuration
-    llm_base_url: "http://127.0.0.1:8000/v1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+    # Credentials are read from OPENAI_API_KEY; do not store them in this file.
     
     # Analysis & Checkpoints
     save_analyses: true
@@ -112,14 +112,14 @@ evaluation:
       use_task_decomposition: false
       rebound:
         enabled: true
-        max_retries: 3 # 降低最大重试次数
-        startup_grace_period: 20 # 增加启动宽限期
+        max_retries: 3
+        startup_grace_period: 20
         detectors:
-          context_overflow: false # 这个精炼过程比较难做所以先不实现,先实现几个基础的
+          context_overflow: false # Disabled because context-overflow refinement is not implemented.
           graph_inconsistency: true
           tool_failure_burst: true
-          progress_stagnation: true # 开启，配合宽限期和多agent过滤使用
-          immediate_error: true # 限制重试次数
+          progress_stagnation: true # Use with the startup grace period and multi-agent filtering.
+          immediate_error: true
         context_compression:
           enabled: false
           max_prompt_chars: 35000
@@ -130,8 +130,8 @@ evaluation:
           preserve_last_turns: 13
           protected_entity_sources: [task, episode, agent_descriptions, world_graph, scene_graph, termination_rules]
           llm:
-            model: "Qwen3.5-9B-YOYO-Instruct"
-            base_url: "http://127.0.0.1:8000/v1"
-            # api_key_env: "OPENAI_API_KEY"
+            model: "gpt-5.6-sol"
+            base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+            api_key_env: "OPENAI_API_KEY"
             max_tokens: 2048
             temperature: 0.2

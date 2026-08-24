@@ -87,7 +87,6 @@ class LLMPlanner(Planner):
         # Initialize Framework Components
         self.perception_connector = PerceptionConnector(
             llm_client=getattr(self.llm, "client", None) if hasattr(self.llm, "client") else None, # Try to get client from LLM wrapper
-            api_key_filename="./habitat_llm/planner/api_key.txt", # Explicitly pass the key path
             perception_sim=env_interface.perception if hasattr(env_interface, "perception") else None
         )
         # If llm wrapper doesn't expose client, PhaseManager might fail. 
@@ -991,8 +990,7 @@ class LLMPlanner(Planner):
 
         return agent_states
 
-    # TODO: @zephirefaith implement agent's room affiliations in the world graph
-    # and edit this function to read from it
+    # TODO: Store agent room affiliations in the world graph and read them here.
     def get_last_agent_positions(self) -> Dict[str, Any]:
         """
         Get the last positions for all agents.

@@ -4,9 +4,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import json
 import os
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import imageio
@@ -37,6 +38,7 @@ class DebugVideoUtil:
 
         # Declare container to store frames used for generating video
         self.frames: List[Any] = []
+        self.frame_metadata: List[Dict[str, Any]] = []
 
         self.output_dir = output_dir
 
@@ -74,7 +76,10 @@ class DebugVideoUtil:
         return concat_image
 
     def _store_for_video(
-        self, observations: Dict[str, Any], hl_actions: Dict[int, Any]
+        self,
+        observations: Dict[str, Any],
+        hl_actions: Dict[int, Any],
+        frame_metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Store a video with observations and text from an observation dict and an agent to action metadata dict.
@@ -101,6 +106,10 @@ class DebugVideoUtil:
             )
 
         self.frames.append(frames_concat)
+        metadata = dict(frame_metadata or {})
+        metadata["frame_index"] = len(self.frames) - 1
+        metadata["time_seconds"] = (len(self.frames) - 1) / 30.0
+        self.frame_metadata.append(metadata)
         return
 
     def _make_video(self, play: bool = True, postfix: str = "") -> None:
@@ -122,6 +131,12 @@ class DebugVideoUtil:
             writer.append_data(frame)
 
         writer.close()
+        timeline_file = (
+            f"{self.output_dir}/videos/video-timeline-{postfix}.jsonl"
+        )
+        with open(timeline_file, "w", encoding="utf-8") as handle:
+            for record in self.frame_metadata:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         if play:
             print("     ...playing video, press 'q' to continue...")
             self.play_video(out_file)

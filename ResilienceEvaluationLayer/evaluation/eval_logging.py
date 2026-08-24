@@ -8,7 +8,7 @@ Keeps EvaluationRunner lean by moving file I/O and analysis logging here.
 DEPRECATION NOTICE:
 - log_rebound_analysis() is deprecated. Use habitat_llm.evaluation.metrics.rebound.log_rebound_metrics()
 - log_saycan_analysis() is deprecated. Use habitat_llm.evaluation.metrics.stability.log_stability_metrics()
-- log_resilience_metrics() is deprecated. Use dimension-based metrics (rebound/stability/degradation)
+- log_resilience_metrics() is deprecated. Use Rebound, Stability, and GE outputs.
 """
 
 import json
@@ -73,6 +73,8 @@ def log_planner_data(
     current_instruction: str,
     env_interface: Any,
     log_detailed_traces: bool,
+    canonical_instruction: Optional[str] = None,
+    policy_instruction: Optional[str] = None,
 ) -> None:
     """
     Logs planner data including prompts, traces, and other info to files.
@@ -119,8 +121,16 @@ def log_planner_data(
 
     os.makedirs(os.path.dirname(file_path_json), exist_ok=True)
 
+    resolved_policy_instruction = policy_instruction or current_instruction
+    resolved_canonical_instruction = (
+        canonical_instruction or resolved_policy_instruction
+    )
     planner_log: Dict[str, Any] = {
-        "task": current_instruction,
+        # Keep the legacy ``task`` field as the planner-visible instruction.
+        "task": resolved_policy_instruction,
+        "policy_instruction": resolved_policy_instruction,
+        "canonical_instruction": resolved_canonical_instruction,
+        "reward_instruction": resolved_canonical_instruction,
         "steps": [],
     }
 
@@ -138,7 +148,14 @@ def log_planner_data(
     logger.info("Planner log saved: %s", file_path_json)
 
     if log_detailed_traces:
-        save_detailed_traces(output_dir, episode_filename, current_instruction, env_interface)
+        save_detailed_traces(
+            output_dir,
+            episode_filename,
+            current_instruction,
+            env_interface,
+            canonical_instruction=resolved_canonical_instruction,
+            policy_instruction=resolved_policy_instruction,
+        )
 
 
 def save_detailed_traces(
@@ -146,6 +163,8 @@ def save_detailed_traces(
     episode_filename: str,
     current_instruction: str,
     env_interface: Any,
+    canonical_instruction: Optional[str] = None,
+    policy_instruction: Optional[str] = None,
 ) -> None:
     """
     Save detailed traces to a pickle file containing instruction, action history and state history.
@@ -153,12 +172,12 @@ def save_detailed_traces(
     for actions in env_interface.agent_action_history.values():
         for action in actions[:-1]:
             if action.response in [None, ""] and action.action[0] != "Done":
-                action_history_string = "\n".join(
-                    [f"{a.action}: {a.response}" for a in actions]
-                )
-                raise ValueError(
-                    f"Agent {action.agent_uid} has a null response on {action.action}: "
-                    f"Action history:\n{action_history_string}"
+                action.response = "No response recorded (auto-filled)."
+                logger.warning(
+                    "Auto-filled missing response while saving detailed trace for "
+                    "agent %s action %s",
+                    action.agent_uid,
+                    action.action,
                 )
 
     file_path_detailed_trace = os.path.join(
@@ -166,8 +185,16 @@ def save_detailed_traces(
         "detailed_traces",
         f"detailed_trace-{episode_filename}.pkl",
     )
+    resolved_policy_instruction = policy_instruction or current_instruction
+    resolved_canonical_instruction = (
+        canonical_instruction or resolved_policy_instruction
+    )
     result = {
-        "instruction": current_instruction,
+        # Compatibility alias for existing trace readers.
+        "instruction": resolved_policy_instruction,
+        "policy_instruction": resolved_policy_instruction,
+        "canonical_instruction": resolved_canonical_instruction,
+        "reward_instruction": resolved_canonical_instruction,
         "action_history": env_interface.agent_action_history,
         "state_history": env_interface.agent_state_history,
     }
@@ -282,6 +309,8 @@ def log_adca_analysis(
     env_interface: Any,
     current_instruction: str,
     critic: Optional[Any] = None,
+    canonical_instruction: Optional[str] = None,
+    policy_instruction: Optional[str] = None,
 ) -> str:
     """
     Save ADCA analysis results to a JSON file.
@@ -292,10 +321,17 @@ def log_adca_analysis(
     filename = f"adca_analysis-episode_{episode_id}_{episode_filename}.json"
     filepath = os.path.join(adca_dir, filename)
 
+    resolved_policy_instruction = policy_instruction or current_instruction
+    resolved_canonical_instruction = (
+        canonical_instruction or resolved_policy_instruction
+    )
     save_data = {
         "episode_id": episode_id,
         "episode_filename": episode_filename,
-        "task_instruction": current_instruction,
+        "task_instruction": resolved_policy_instruction,
+        "policy_instruction": resolved_policy_instruction,
+        "canonical_instruction": resolved_canonical_instruction,
+        "reward_instruction": resolved_canonical_instruction,
         "adca_result": adca_result,
     }
 
@@ -630,7 +666,7 @@ def log_resilience_summary(
        where α = 0.6, β = 0.4 (configurable)
 
     DEPRECATED: This function is deprecated and will be removed in a future version.
-    Use dimension-based metrics (rebound/stability/degradation) instead.
+    Use Rebound, Stability, and GE outputs instead.
     """
     warnings.warn(
         "log_resilience_summary() is deprecated. "
@@ -708,4 +744,3 @@ def log_resilience_summary(
     _write_json(target_filepath, summary_data)
     logger.info("Resilience summary saved: %s", target_filepath)
     return target_filepath
-

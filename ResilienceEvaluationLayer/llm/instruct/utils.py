@@ -27,6 +27,9 @@ PERCEPTION_TOOL_STRINGS = [
 ]
 SINGLE_STEP_PROMPT_HEADER = "Solve the given multi-agent planning problem as best as you can. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. Below is the detailed description of the actions you can use for solving the task."
 STOP_WORD = "<end_act>"
+ACTION_DIRECTIVE_PATTERN = re.compile(
+    r"^Agent_(\d+)_Action:\s*(.*)$"
+)
 
 
 def get_world_descr(
@@ -411,6 +414,13 @@ def actions_parser(
     # Container to store parser output
     actions_dict: Dict[int, Tuple[str, str, str]] = {}
 
+    true_agent_ids = [agent.uid for agent in agents]
+    directive_errors = []
+
+    def _record_directive_error(message: str) -> None:
+        if message not in directive_errors:
+            directive_errors.append(message)
+
     # Split input string
     lines = input_string.strip().split("\n")
 
@@ -418,31 +428,22 @@ def actions_parser(
         line = line.strip()
         line = remove_non_alpha_left(line)
         if line.startswith("Agent") and ("_Action" in line):
-            # Extract agent info and actions info
-            parts = line.split(":", 1)
-            if len(parts) < 2:
+            directive_match = ACTION_DIRECTIVE_PATTERN.match(line)
+            if directive_match is None:
+                _record_directive_error(
+                    "Invalid Action directive. Expected "
+                    "'Agent_<numeric_id>_Action: Tool[arguments]'."
+                )
                 continue
 
-            agent_id, action_info = parts[0].strip(), parts[1].strip()
-
-            # Extracting the numerical part of the agent ID
-            if "_" in agent_id:
-                agent_id = int(agent_id.split("_")[1])
-            else:
-                agent_id_list = [int(i) for i in parts[0].split() if i.isdigit()]
-                if len(agent_id_list) < 1:
-                    continue
-                agent_id = agent_id_list[0]
+            agent_id = int(directive_match.group(1))
+            action_info = directive_match.group(2).strip()
 
             # Make sure that agent uid is valid
-            true_agent_ids = [agent.uid for agent in agents]
             if agent_id not in true_agent_ids:
-                for true_agent_id in true_agent_ids:
-                    actions_dict[true_agent_id] = (
-                        None,
-                        None,
-                        f"Invalid Agent ID in Action directive. Only valid Agent IDs are {true_agent_ids}!",
-                    )
+                _record_directive_error(
+                    f"Invalid Agent ID in Action directive. Only valid Agent IDs are {true_agent_ids}!"
+                )
                 continue
 
             # Normalize LLM "no-op" variants to Wait[].
@@ -494,24 +495,28 @@ def actions_parser(
                         None,
                         "Your agent cannot fill objects. You should let your partner agent do this part of the task and move on to other parts of the task. If you are holding a corresponding object for this action, please place it on a receptacle with faucet.",
                     )
+                    continue
                 elif "Clean" in action_info:
                     actions_dict[agent_id] = (
                         None,
                         None,
                         "Your agent cannot clean or wash objects. You should let your partner agent do this part of the task and move on to other parts of the task. If you are holding a corresponding object for this action, please place it on the floor and proceed to other parts of the task.",
                     )
+                    continue
                 elif "PoweredOn" in action_info:
                     actions_dict[agent_id] = (
                         None,
                         None,
                         "Your agent cannot turn on objects. You should let your partner agent do this part of the task and move on to other parts of the task",
                     )
+                    continue
                 elif "PoweredOff" in action_info:
                     actions_dict[agent_id] = (
                         None,
                         None,
                         "Your agent cannot turn off objects. You should let your partner agent do this part of the task and move on to other parts of the task",
                     )
+                    continue
                 else:
                     if params and not any(
                         tool in action_info for tool in params["tool_list"]
@@ -521,6 +526,7 @@ def actions_parser(
                             None,
                             "This tool/action is invalid for your agent. So no actions will be assigned to the agent. Please re-think what your agent should do for the task and assign a valid action to the agent.",
                         )
+                        continue
             else:
                 if params and not any(
                     tool in action_info for tool in params["tool_list"]
@@ -530,6 +536,7 @@ def actions_parser(
                         None,
                         "This tool/action is invalid for your agent. So no actions will be assigned to the agent. Please re-think what your agent should do for the task and assign a valid action to the agent.",
                     )
+                    continue
 
             # Split the action info into action name and action arguments (inputs)
             action_name, action_input = action_info.split("[")
@@ -542,6 +549,12 @@ def actions_parser(
 
             actions_dict[agent_id] = (action_name, action_input, None)
 
+    if directive_errors:
+        message = " ".join(directive_errors)
+        return {
+            true_agent_id: (None, None, message)
+            for true_agent_id in true_agent_ids
+        }
     return actions_dict
 
 

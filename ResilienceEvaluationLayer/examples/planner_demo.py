@@ -11,7 +11,6 @@ import time
 import os
 import traceback
 import json
-import shutil
 import gc
 import torch
 from omegaconf import OmegaConf
@@ -31,6 +30,10 @@ from habitat_llm.agent.env.evaluation.evaluation_functions import (
 )
 
 from habitat_llm.utils import cprint, setup_config, fix_config
+from habitat_llm.config_redaction import (
+    redacted_config_yaml,
+    write_redacted_config_copy,
+)
 
 
 from habitat_llm.agent.env import (
@@ -109,7 +112,7 @@ def write_config(config):
     output_file = os.path.join(config.paths.results_dir, dataset_file)
     os.makedirs(output_file, exist_ok=True)
     with open(f"{output_file}/config.yaml", "w+") as f:
-        f.write(OmegaConf.to_yaml(config))
+        f.write(redacted_config_yaml(config))
 
     # Copy over the RLM config
     planner_configs = []
@@ -132,8 +135,9 @@ def write_config(config):
             if len(yaml_rlm_path) > 0:
                 yaml_rlm_file = f"{yaml_rlm_path}/config.yaml"
                 if os.path.isfile(yaml_rlm_file):
-                    shutil.copy(
-                        yaml_rlm_file, f"{output_file}/config_rlm{suffix_rlm}.yaml"
+                    write_redacted_config_copy(
+                        yaml_rlm_file,
+                        f"{output_file}/config_rlm{suffix_rlm}.yaml",
                     )
 
 

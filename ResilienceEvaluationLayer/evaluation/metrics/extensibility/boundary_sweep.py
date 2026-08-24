@@ -5,7 +5,7 @@ Boundary sweep generator
 ========================
 
 Generates the parameterized stress path ``θ(λ) | λ ∈ [0,1]`` used by the
-AUDC / Contract-Margin experiment (§3.2 of the resilience design doc).
+stress-boundary capacity experiment (§3.2 of the resilience design doc).
 
 The sweep is intentionally declarative: it only produces
 :class:`~habitat_llm.evaluation.perturbation.PerturbationSpec` instances; the
@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import List, Sequence, Tuple
 
 from habitat_llm.evaluation.perturbation import PerturbationSpec
+from habitat_llm.evaluation.perturbation.bank import STRESS_FAMILY, STRESS_GRID
 
 
 @dataclass
@@ -29,8 +30,7 @@ class BoundarySweep:
     Attributes
     ----------
     kind:
-        Perturbation family used as the stress axis (defaults to
-        ``irrelevant_perturbation`` per §3.2 of the design doc).
+        Frozen instruction/context family used as the stress axis.
     lambdas:
         Stress grid :math:`\{\lambda_i\}` in ``[0, 1]``. Must be sorted
         ascending.
@@ -38,8 +38,8 @@ class BoundarySweep:
         Repeat seeds per lambda value.
     """
 
-    kind: str = "irrelevant_perturbation"
-    lambdas: Tuple[float, ...] = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
+    kind: str = STRESS_FAMILY
+    lambdas: Tuple[float, ...] = STRESS_GRID
     seeds: Tuple[int, ...] = (0, 1, 2)
 
     def __post_init__(self) -> None:
@@ -53,10 +53,10 @@ class BoundarySweep:
     def iter_specs(self) -> List[PerturbationSpec]:
         """Produce one :class:`PerturbationSpec` per ``(λ, seed)`` pair."""
         specs: List[PerturbationSpec] = []
-        for lam in self.lambdas:
-            if lam <= 0.0:
-                # λ = 0 is the clean reference (intensity = 0 → no mutation).
-                for seed in self.seeds:
+        for seed in self.seeds:
+            for lam in self.lambdas:
+                if lam <= 0.0:
+                    # λ = 0 is the clean reference (intensity = 0 → no mutation).
                     specs.append(
                         PerturbationSpec(
                             kind="clean",
@@ -64,8 +64,7 @@ class BoundarySweep:
                             intensity=0.0,
                         )
                     )
-            else:
-                for seed in self.seeds:
+                else:
                     specs.append(
                         PerturbationSpec(
                             kind=self.kind,

@@ -1,0 +1,181 @@
+# @package _global_
+
+defaults:
+  - /baselines/qwen35_centralized_zero_shot_react_summary_vllm_state
+  - /evaluation/resilience_config
+  - _self_
+
+# The planner remains the same local vLLM-served Qwen3.5 policy in both
+# conditions. Only the reward/analysis Judge model changes.
+evaluation:
+  max_episode_sim_steps: 18000
+  context_evolve:
+    enabled: false
+  critic:
+    analysis_export_include_world_state: false
+
+expq1:
+  output_subdir: "llm_judge_stability_compare"
+  baseline_model: "qwen35_vllm_planner__gpt-5.1_judge"
+  optimized_model: "qwen35_vllm_planner__GPT-4o_judge"
+  shared:
+    working_set: [78, 127, 126, 11, 79, 80, 81]
+    base_patch:
+      resilience:
+        output_subdir: "resilience"
+        stage_baseline:
+          enabled: true
+          evidence_store_enabled: true
+          reuse_policy: "reuse_and_extend"
+          extension_samples_per_episode: 0
+          write_persistent_copy: true
+          persistent_store_dir: "evaluation/stage_baselines"
+          runtime_subdir: "runtime"
+          statistics_subdir: "statistics"
+          archive_subdir: "archives"
+          formal:
+            min_independent_trajectories: 3
+            min_transitions: 30
+            require_successful_clean: true
+            allow_family_covariance_shrinkage: true
+          seed_lifecycle:
+            enabled: true
+            initial_calibration_seeds: [0, 1, 2]
+            evaluation_seeds: [0, 1, 2]
+            allow_paired_seeds: true
+            extension_seed_start: 3
+            critic_training_seeds: [100, 101, 102]
+          episode_aggregate:
+            enabled: true
+            subdir: "by_episode"
+            merge_existing: true
+            fallback_when_hash_missing: true
+            allow_partial_compose: false
+
+  subexperiments:
+    stability_judge_model_comparison:
+      enabled: true
+      argument: >-
+        Compare resilience Stability under an identical vLLM planner,
+        episodes, perturbations, and seeds while changing only the LLM Judge.
+        Each Judge receives its own clean StageBaseline calibration.
+      headline_metric: "stability_beta_family"
+      support_metrics:
+        - "stability_beta_family_valid"
+        - "stability_beta_family_n_anchors"
+        - "stability_beta_trajectory"
+        - "stability_beta_out"
+        - "stability_beta_oscillation"
+        - "stability_beta_action"
+        - "stability_beta_progress"
+        - "stability_beta_success"
+        - "stability_td_error_mean_abs"
+        - "stability_td_error_p95_abs"
+        - "stability_gae_mean_abs"
+        - "stability_gae_p95_abs"
+        - "stability_return_target_variance"
+        - "task_state_success"
+        - "task_percent_complete"
+        - "sim_step_count"
+        - "replanning_count_0"
+        - "replanning_count_1"
+      summary_metrics:
+        - "stability_beta_family"
+        - "stability_beta_family_valid"
+        - "stability_beta_family_n_anchors"
+        - "stability_beta_neighborhood"
+        - "stability_beta_trajectory"
+        - "stability_beta_out"
+        - "stability_beta_oscillation"
+        - "stability_beta_action"
+        - "stability_beta_progress"
+        - "stability_beta_success"
+        - "stability_td_error_mean_abs"
+        - "stability_td_error_p95_abs"
+        - "stability_gae_mean_abs"
+        - "stability_gae_p95_abs"
+        - "stability_return_target_variance"
+        - "task_state_success"
+        - "task_percent_complete"
+        - "sim_step_count"
+        - "replanning_count_0"
+        - "replanning_count_1"
+      episode_ids: [78, 127, 126, 11, 79, 80, 81]
+      postprocess: ["stability"]
+      base_patch:
+        resilience:
+          mode: "stability"
+          perturbations: ["clean", "surface_rewrite", "filler_injection"]
+          # Legacy grid field retained for config compatibility. Formal runs
+          # use stage_baseline.seed_lifecycle partitions above.
+          seeds: [0, 1, 2]
+          intensities: [1.0]
+      summary_group_keys:
+        - "judge_model"
+        - "task_family"
+      comparison:
+        group_key: "judge_model"
+        reference: "gpt-5.1"
+        candidate: "GPT-4o"
+        # Preserve the experimental pairing unit. Coverage rows make a failed
+        # worker visible instead of silently changing a family-level mean.
+        pair_keys:
+          - "episode_id"
+          - "perturbation_seed"
+          - "perturbation_type"
+          - "perturbation_intensity"
+        statistic: "mean"
+        output_filename: "judge_model_comparison.csv"
+        metrics:
+          - "stability_beta_family"
+          - "stability_beta_neighborhood"
+          - "stability_beta_trajectory"
+          - "stability_beta_out"
+          - "stability_beta_oscillation"
+          - "stability_beta_action"
+          - "stability_beta_progress"
+          - "stability_beta_success"
+          - "stability_td_error_mean_abs"
+          - "stability_gae_mean_abs"
+          - "stability_return_target_variance"
+          - "task_state_success"
+          - "task_percent_complete"
+          - "sim_step_count"
+          - "replanning_count_0"
+          - "replanning_count_1"
+      conditions:
+        - name: "gpt_5_1"
+          label: "gpt-5.1 Judge"
+          patch:
+            evaluation:
+              adca:
+                llm_model: "gpt-5.1"
+                llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+              critic:
+                llm_model: "gpt-5.1"
+                llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+            resilience:
+              stage_baseline:
+                judge_model: "gpt-5.1"
+                judge_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+          phases:
+            - label: "main"
+              patch: {}
+
+        - name: "gpt_4o"
+          label: "GPT-4o Judge"
+          patch:
+            evaluation:
+              adca:
+                llm_model: "GPT-4o"
+                llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+              critic:
+                llm_model: "GPT-4o"
+                llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+            resilience:
+              stage_baseline:
+                judge_model: "GPT-4o"
+                judge_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+          phases:
+            - label: "main"
+              patch: {}

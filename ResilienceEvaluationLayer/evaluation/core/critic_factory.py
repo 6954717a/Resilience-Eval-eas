@@ -131,6 +131,7 @@ class CriticFactory:
             "analysis_export_dir",
             os.path.join("analyses", "critic_exports"),
         )
+        _normalize_under_output("analysis_focus_dir", "analyze")
         _normalize_under_output("checkpoint_dir", "checkpoints")
 
         state_encoder_cfg = config_dict.setdefault("state_encoder", {})
@@ -165,6 +166,7 @@ class CriticFactory:
         logger.info(f"  - Normalized output_dir: {normalized_output_dir}")
         logger.info(f"  - Analysis save dir: {config_dict.get('analysis_save_dir', 'N/A')}")
         logger.info(f"  - Analysis export dir: {config_dict.get('analysis_export_dir', 'N/A')}")
+        logger.info(f"  - Analysis focus dir: {config_dict.get('analysis_focus_dir', 'N/A')}")
         logger.info(f"  - StateEncoder debug dir: {config_dict.get('state_encoder_debug_dir', 'N/A')}")
         logger.info(f"  - Checkpoint dir: {config_dict.get('checkpoint_dir', 'N/A')}")
 

@@ -1,24 +1,27 @@
 """
 Stability Metrics Module
 
-This module provides unified policy stability metrics, measuring output consistency
-under perturbation. Extracts metrics from StateEncoder variance, SafetyMonitor,
-and optionally SayCan scores.
+This module separates single-rollout critic evidence from formal neighborhood
+stability under controlled perturbations.
 
-Core Metrics:
-- β: Policy Stability Score
-- σ²_V: Value Function Variance
-- N_replan: Replanning Count
-- P_cbf: CBF Penalty
+Core metric: beta is the supremum sensitivity of the stage-normalized
+trajectory loss. Value/TD/GAE and action differences remain diagnostics.
 """
 
 from .stability_metrics import StabilityMetrics
-from .stability_collector import BetaAggregate, StabilityCollector
+from .stability_collector import (
+    BetaAggregate,
+    BetaFamilyAggregate,
+    StabilityCollector,
+)
 from .stability_logging import log_stability_metrics
+from .trajectory_loss import compute_stage_trajectory_loss
 
 __all__ = [
     "StabilityMetrics",
     "StabilityCollector",
     "BetaAggregate",
+    "BetaFamilyAggregate",
     "log_stability_metrics",
+    "compute_stage_trajectory_loss",
 ]

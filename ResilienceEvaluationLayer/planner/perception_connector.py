@@ -2,7 +2,7 @@
 PerceptionConnector module - bridges perception/world state and planning utilities.
 """
 from typing import Dict, List, Any, Optional, Tuple, Union, TYPE_CHECKING
-from pathlib import Path
+import os
 
 import numpy as np
 import openai
@@ -61,7 +61,7 @@ class PerceptionConnector:
         self,
         llm_client: Optional[Any] = None,
         api_key_filename: Optional[str] = None,
-        llm_base_url: Optional[str] = "https://api.moonshot.cn/v1",
+        llm_base_url: Optional[str] = None,
         perception_sim: Optional[Any] = None,
     ):
         """
@@ -71,8 +71,6 @@ class PerceptionConnector:
         self.llm_client = llm_client
         self.perception_sim = perception_sim
         self._world_state_provider: Optional[Any] = None
-        api_key_filename = api_key_filename or "api_key"
-
         # Task sequencing state
         self.task_dependency_graph: Dict[str, List[str]] = {}
         self.completed_tasks: List[str] = []
@@ -276,32 +274,26 @@ class PerceptionConnector:
         if self.llm_client is not None:
             return
 
-        if not api_key_filename:
-            print(
-                "PerceptionConnector: LLM client not provided and api_key_filename "
-                "not specified. Task decomposition will not be available."
+        environment_key = os.environ.get("OPENAI_API_KEY")
+        llm_base_url = (
+            llm_base_url
+            or os.environ.get("HABITAT_LLM_BASE_URL")
+            or os.environ.get("LLM_BASE_URL")
+        )
+        if environment_key:
+            self.llm_client = openai.OpenAI(
+                api_key=environment_key,
+                base_url=llm_base_url,
             )
             return
 
-        try:
-            api_key_path = Path(api_key_filename + ".txt")
-            if not api_key_path.exists():
-                api_key_path = Path(api_key_filename)
-
-            if api_key_path.exists():
-                api_key = api_key_path.read_text().strip()
-                self.llm_client = openai.OpenAI(
-                    api_key=api_key,
-                    base_url=llm_base_url,
-                )
-                if getattr(self, "task_decomposer", None) is not None:
-                    self.task_decomposer.llm_client = self.llm_client
-                print(
-                    "PerceptionConnector: LLM client initialized using API key from "
-                    f"{api_key_path} and base URL {llm_base_url}"
-                )
-            else:
-                print(f"API key file not found at {api_key_path}")
-        except Exception as e:
-            print(f"Error initializing LLM client in PerceptionConnector: {e}")
-
+        if api_key_filename:
+            print(
+                "PerceptionConnector: api_key_filename is deprecated and ignored; "
+                "inject OPENAI_API_KEY through the server secret environment."
+            )
+        else:
+            print(
+                "PerceptionConnector: LLM client and OPENAI_API_KEY are missing. "
+                "Task decomposition will not be available."
+            )

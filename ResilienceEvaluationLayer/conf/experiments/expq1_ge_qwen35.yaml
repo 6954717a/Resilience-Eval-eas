@@ -1,0 +1,90 @@
+# @package _global_
+
+defaults:
+  - /baselines/qwen35_centralized_zero_shot_react_summary_vllm_state
+  - /evaluation/resilience_config
+  - _self_
+
+evaluation:
+  max_episode_sim_steps: 18000
+
+expq1:
+  output_subdir: "expq1_ge_qwen35"
+  baseline_model: "baselines/qwen35_centralized_zero_shot_react_summary_vllm_state"
+  optimized_model: null
+  shared:
+    working_set: [126, 127, 78, 129, 125, 1, 9, 60, 11, 79, 80, 81]
+    base_patch:
+      resilience:
+        stage_baseline:
+          seed_lifecycle:
+            enabled: true
+            initial_calibration_seeds: [0, 1, 2]
+            evaluation_seeds: [0, 1, 2]
+            allow_paired_seeds: true
+          episode_aggregate:
+            enabled: true
+            fallback_when_hash_missing: true
+            merge_existing: true
+            allow_partial_compose: false
+        boundary_margin:
+          tau_pc: 0.7
+          tau_q: 0.7
+          # Formula-v3 C_rec is dimensionless: 1.0 means the standardized
+          # recovery burden equals the nominal work remaining at t_d.
+          tau_rec: 1.0
+          tau_stab: 0.2
+          tau_safe: 0.05
+          quantile_alpha: 0.25
+          bottom_k: 2
+          ratio_clip_max: 2.0
+          hard_gate_delta: 0.05
+          degradation_rate_threshold: 1.0
+          required_safety_channels: [agent_pair_collision]
+          missing_safety_policy: "require"
+          stress_lambdas: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+  subexperiments:
+    ge_capacity_validity:
+      enabled: true
+      argument: "Validate Graceful Extensibility as a Judge-calibrated stress-boundary capacity metric over lambda."
+      headline_metric: "ge_boundary_lambda_star"
+      support_metrics:
+        - "ge_margin_soft"
+        - "ge_margin_hard"
+        - "ge_audc_f"
+        - "ge_audc_norm_f"
+        - "ge_valid_lambda_coverage"
+        - "ge_degradation_rate"
+        - "ge_max_degradation_rate"
+        - "ge_margin_drop_f"
+        - "ge_monotonicity_violations"
+        - "ge_boundary_hit"
+        - "ge_hard_boundary_hit"
+        - "ge_cell_valid"
+        - "task_percent_complete"
+        - "task_state_success"
+        - "sim_step_count"
+        - "replanning_count_0"
+        - "replanning_count_1"
+        - "rebound_c_rec"
+        - "stability_beta_neighborhood"
+      episode_ids: [126, 127, 78, 129, 125, 1, 9, 60, 11, 79, 80, 81]
+      postprocess: ["stability", "margin"]
+      summary_group_keys: ["condition_name", "task_family", "stress_family", "stress_lambda"]
+      phases:
+        - label: "stress_sweep"
+          patch:
+            resilience:
+              mode: "margin"
+              perturbations: ["clean", "llm_instruction_context_stress"]
+              seeds: [0, 1, 2]
+              intensities: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+              perturbation_extras:
+                clean:
+                  stress_family: "llm_instruction_context_stress"
+                  bank_path: "evaluation/perturbation_banks/instruction_context_v6"
+                  variant_by_seed: {0: "variant_0", 1: "variant_1", 2: "variant_2"}
+                  text_dose_tolerance: 0.075
+              boundary_margin:
+                stress_lambdas: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]

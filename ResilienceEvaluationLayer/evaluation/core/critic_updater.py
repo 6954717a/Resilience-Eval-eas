@@ -11,6 +11,7 @@ import copy
 from typing import Any, Dict, Optional
 
 from habitat_llm.evaluation.experiments.common import infer_task_family
+from habitat_llm.evaluation.proposition_outcome import proposition_outcome_from_info
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,8 @@ class CriticUpdater:
         current_instruction: str,
         episode_filename: str,
         loop_step_count: int,
+        policy_instruction: Optional[str] = None,
+        reward_instruction: Optional[str] = None,
     ) -> None:
         if prev_world_state is None:
             logger.debug("Skipping critic update: no previous state")
@@ -108,6 +111,8 @@ class CriticUpdater:
             step_info=step_info,
             planner_info=planner_info,
             current_instruction=current_instruction,
+            policy_instruction=policy_instruction,
+            reward_instruction=reward_instruction,
             episode_filename=episode_filename,
             loop_step_count=loop_step_count,
         )
@@ -146,7 +151,19 @@ class CriticUpdater:
         current_instruction: str,
         episode_filename: str,
         loop_step_count: int,
+        policy_instruction: Optional[str] = None,
+        reward_instruction: Optional[str] = None,
     ) -> Dict[str, Any]:
+        resolved_policy_instruction = (
+            current_instruction
+            if policy_instruction is None
+            else policy_instruction
+        )
+        resolved_reward_instruction = (
+            resolved_policy_instruction
+            if reward_instruction is None
+            else reward_instruction
+        )
         planning_step_count = 0
         replanning_count = planner_info.get("replanning_count")
         if isinstance(replanning_count, dict) and replanning_count:
@@ -182,12 +199,23 @@ class CriticUpdater:
         proposition_tracker = copy.deepcopy(
             step_info.get("auto_eval_proposition_tracker", {}) or {}
         )
+        proposition_outcome = proposition_outcome_from_info(step_info)
         action_responses = copy.deepcopy(planner_info.get("responses", {}) or {})
 
         critic_info = {
-            "task_instruction": current_instruction,
+            # Backwards compatibility: StateEncoder and historical exports
+            # consume task_instruction as the planner-visible instruction.
+            "task_instruction": resolved_policy_instruction,
+            "policy_instruction": resolved_policy_instruction,
+            # RewardShaper consumes the canonical task, not the perturbed
+            # policy prompt.  canonical_instruction is an explicit audit alias.
+            "reward_instruction": resolved_reward_instruction,
+            "canonical_instruction": resolved_reward_instruction,
             "task_percent_complete": step_info.get("task_percent_complete", 0.0),
             "task_state_success": step_info.get("task_state_success", 0.0),
+            "proposition_satisfied_fraction": proposition_outcome.fraction,
+            "proposition_satisfied_count": proposition_outcome.satisfied_count,
+            "proposition_total": proposition_outcome.total,
             "step_count": step_info.get("num_steps", loop_step_count),
             "sim_step_count": step_info.get("num_steps", loop_step_count),
             "loop_step_count": loop_step_count,

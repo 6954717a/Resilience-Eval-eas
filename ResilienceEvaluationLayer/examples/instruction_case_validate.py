@@ -1306,5 +1306,3 @@ class SandboxValidationManager:
 
 
 sandbox_validation_manager = SandboxValidationManager()
-
-

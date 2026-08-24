@@ -4,4 +4,4 @@ WANDB:
   mode    : online
   name    : test_1
   group   : tests
-  entity  : sergioarnaud
+  entity  : null

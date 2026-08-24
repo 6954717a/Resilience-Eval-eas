@@ -16,9 +16,9 @@ evaluation:
         port: 8000
         api_mode: auto
         # Optional OpenAI-compatible root, e.g. http://127.0.0.1:8000/v1
-        # served_model_name: "Qwen3.5-9B-YOYO-Instruct"
+        served_model_name: "${oc.env:QWEN35_SERVED_MODEL}"
         generation_params:
-          engine: "Qwen3.5-9B-YOYO-Instruct"
+          engine: "${oc.env:QWEN35_SERVED_MODEL}"
           max_tokens: 2048
           temperature: 0.7
           stop: ["<|im_end|>", "\n\n\n"]

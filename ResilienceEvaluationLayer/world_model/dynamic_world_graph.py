@@ -610,8 +610,7 @@ class DynamicWorldGraph(WorldGraph):
         Given the processed observation, extract the object's centroid and convert to a
         node
         NOTE: We use Sim information to populate locations for all objects detected by
-        Human. Needs to be refactored post bug-fix in KinematicHumanoid class
-        @zephirefaith @xavipuig
+        Human. This should be refactored after the KinematicHumanoid fix.
         """
         obj_id_to_category_mapping = detector_frame["object_category_mapping"]
         obj_id_to_handle_mapping = detector_frame["object_handle_mapping"]

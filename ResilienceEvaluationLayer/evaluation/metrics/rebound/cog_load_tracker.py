@@ -11,15 +11,17 @@ Implements the **volume × validity** model for cognitive excess work in
 .. math::
 
     W_t^\text{cog} = \sum_{c \in \{pln, per, coord\}}
-                        \bigl(v_t^c - \bar v^c\bigr)^+ \cdot \bigl(1 - q_t^c\bigr)
+        \frac{\bigl(v_t^c - \bar v^c\bigr)^+}
+             {\max(|\bar v^c|, 1)}
+        \bigl(1 - q_t^c\bigr)
 
 * **Volume** :math:`v_t^c` — count of channel-``c`` activations emitted at step
   ``t``.  Planning (``pln``) volume comes from ``planner_info['replanned']`` and
   the ``replan_anchor`` / ``planning_transition`` analysis tags; Perception
   (``per``) volume is the number of tool response events flagged with
   ``response_event``; Coordination (``coord``) volume is the number of
-  cross-agent hand-off actions (``handover``/``coordinate``) or steps spent
-  in the ``coordination`` modality.
+  rising-edge cross-agent hand-off actions (``handover``/``coordinate``).
+  ``Wait`` and coordination-modality idle time are physical gap diagnostics.
 * **Validity** :math:`q_t^c \in [0,1]` — fraction of the L-step lookahead in
   which the channel-``c`` activation *paid off* (positive ``Δp`` or ``Δq``).
   It is computed *offline* once all ``planner_infos`` are known, so the
@@ -40,9 +42,15 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from .recovery_features import (
+    COGNITIVE_CHANNELS,
+    cognitive_event_keys,
+    normalized_cognitive_excess,
+)
+
 logger = logging.getLogger(__name__)
 
-CHANNELS: Tuple[str, ...] = ("pln", "per", "coord")
+CHANNELS: Tuple[str, ...] = COGNITIVE_CHANNELS
 
 
 @dataclass
@@ -55,9 +63,7 @@ class _ChannelRecord:
 
     def weighted_excess(self, baseline_volume: float) -> float:
         q = 1.0 if self.validity is None else float(self.validity)
-        # "Weight" by *invalidity* (1 - q) so well-paid-off replans do not
-        # count as wasted cognitive work.
-        return self.excess(baseline_volume) * max(0.0, 1.0 - q)
+        return normalized_cognitive_excess(self.volume, baseline_volume, q)
 
 
 @dataclass
@@ -94,9 +100,21 @@ class CogLoadTracker:
         self.lookahead_L = int(lookahead_L)
         self.progress_eps = float(progress_eps)
         self._steps: List[CognitiveStepRecord] = []
+        self._active_event_keys: Dict[str, set[str]] = {
+            channel: set() for channel in CHANNELS
+        }
 
     def reset(self) -> None:
         self._steps = []
+        self._active_event_keys = {channel: set() for channel in CHANNELS}
+
+    def _edge_volume(self, channel: str, active_keys: set[str]) -> float:
+        """Count rising edges so persistent state is not re-counted as work."""
+
+        previous = self._active_event_keys.get(channel, set())
+        volume = float(len(active_keys - previous))
+        self._active_event_keys[channel] = set(active_keys)
+        return volume
 
     # ------------------------------------------------------------------
     # Online phase
@@ -108,44 +126,12 @@ class CogLoadTracker:
         modality: str = "planning",
     ) -> CognitiveStepRecord:
         record = CognitiveStepRecord(step=int(step))
-
-        # Planning volume
-        pln_volume = 0.0
-        replanned = planner_info.get("replanned") or {}
-        if isinstance(replanned, Mapping):
-            pln_volume += float(sum(1 for v in replanned.values() if bool(v)))
-        tags = planner_info.get("analysis_tags") or []
-        if isinstance(tags, str):
-            tags = [tags]
-        tag_set = {str(t) for t in tags}
-        if tag_set & {"replan_anchor", "planning_transition"}:
-            pln_volume += 1.0
-        record.get("pln").volume = pln_volume
-
-        # Perception volume (tool response events)
-        per_volume = 0.0
-        if "response_event" in tag_set:
-            per_volume += 1.0
-        responses = planner_info.get("responses") or {}
-        if isinstance(responses, Mapping):
-            per_volume += float(sum(1 for v in responses.values() if v))
-        record.get("per").volume = per_volume
-
-        # Coordination volume
-        coord_volume = 0.0
-        high_level_actions = planner_info.get("high_level_actions") or {}
-        if isinstance(high_level_actions, Mapping):
-            for _, act in high_level_actions.items():
-                name = None
-                if isinstance(act, tuple) and act:
-                    name = str(act[0]).lower() if act[0] is not None else None
-                elif isinstance(act, str):
-                    name = act.split("[", 1)[0].lower()
-                if name and name in ("handover", "coordinate", "wait"):
-                    coord_volume += 1.0
-        if str(modality).lower() == "coordination":
-            coord_volume += 0.5  # idle-in-coordination contribution
-        record.get("coord").volume = coord_volume
+        active = cognitive_event_keys(planner_info)
+        for channel in CHANNELS:
+            record.get(channel).volume = self._edge_volume(
+                channel,
+                active[channel],
+            )
 
         self._steps.append(record)
         return record
@@ -172,18 +158,21 @@ class CogLoadTracker:
         m = min(len(progress_deltas), len(q_deltas))
         if n == 0 or m == 0:
             return
-        for rec in self._steps:
-            if rec.step >= m:
-                continue
-            end = min(m, rec.step + self.lookahead_L + 1)
-            window = range(rec.step + 1, end)
-            if not window:
+        # Use observation order rather than the externally visible step label.
+        # Runtime transition labels are one-based, while the delta arrays are
+        # zero-based; indexing by ``rec.step`` skipped the first future outcome.
+        # This now matches StageBaselineEstimator's clean-pass lookahead.
+        for index, rec in enumerate(self._steps):
+            start = index + 1
+            end = min(m, start + self.lookahead_L)
+            future = range(start, end)
+            if start >= end:
                 valid = 0.0
             else:
-                denom = max(1, end - (rec.step + 1))
+                denom = end - start
                 hits = sum(
                     1
-                    for j in window
+                    for j in future
                     if progress_deltas[j] > self.progress_eps
                     or q_deltas[j] > self.progress_eps
                 )
@@ -198,7 +187,7 @@ class CogLoadTracker:
         self,
         baseline_volume: Mapping[str, float],
     ) -> List[Dict[str, float]]:
-        """Return per-step :math:`(v_t^c - \bar v^c)^+ (1 - q_t^c)` per channel."""
+        """Return normalized volume-by-invalidity features per channel."""
         out: List[Dict[str, float]] = []
         for rec in self._steps:
             entry: Dict[str, float] = {}

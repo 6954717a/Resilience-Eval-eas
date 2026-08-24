@@ -14,7 +14,7 @@ expq3:
   subexperiments:
     rebound_optimization:
       enabled: true
-      argument: "验证 monitor/context 修正注入是否能降低恢复代价，尤其是认知恢复代价。"
+      argument: "Evaluate whether monitor/context correction injection reduces recovery cost, especially cognitive recovery cost."
       headline_metric: "rebound_c_rec"
       support_metrics:
         - "rebound_c_rec_cog"
@@ -71,10 +71,10 @@ expq3:
 
     stability_optimization:
       enabled: true
-      argument: "验证面向稳定性的 prompt/state 约束代理优化是否提升 β-stability。默认提供可运行的保守 patch，后续可替换为显式 anchoring 实现。"
+      argument: "Evaluate whether a stability-oriented prompt/state constraint proxy improves beta-stability. The default patch is conservative and runnable; explicit anchoring can replace it later."
       headline_metric: "stability_beta_neighborhood"
       support_metrics:
-        - "stability_beta_vv"
+        - "stability_beta_trajectory"
         - "stability_beta_out"
         - "task_percent_complete"
       episode_ids: [126, 127, 78, 129, 125, 1, 9, 60, 11, 79, 80, 81]
@@ -125,8 +125,8 @@ expq3:
 
     ge_optimization:
       enabled: true
-      argument: "验证高压力区间下的 graceful fallback / contract-aware 代理优化是否抬升 Margin 与 AUDC。默认 patch 使用当前仓库已有可运行开关。"
-      headline_metric: "ge_contract_margin_min"
+      argument: "Evaluate whether graceful fallback or boundary-aware proxy optimization increases boundary capacity and curve area under high stress. The default patch uses runnable options already available in this repository."
+      headline_metric: "ge_boundary_lambda_star"
       support_metrics:
         - "ge_audc_f"
         - "ge_boundary_hit"

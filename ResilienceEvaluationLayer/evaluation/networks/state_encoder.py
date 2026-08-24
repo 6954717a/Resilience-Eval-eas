@@ -24,8 +24,13 @@ from habitat_llm.evaluation.experiments.common import (
     STATE_ENCODER_CATEGORY_NAMES,
     classify_feature_category,
 )
+from habitat_llm.evaluation.proposition_outcome import proposition_outcome_from_info
 
 logger = logging.getLogger(__name__)
+
+STATE_ENCODER_FEATURE_SCHEMA_VERSION = (
+    "state_encoder_features_v3_target_alias_floor_unknown_mask"
+)
 
 
 class _HashTextEncoder:
@@ -420,6 +425,7 @@ class StateEncoder(nn.Module):
         task_context = world_state_dict.get("task_context", {}) or {}
         semantic_payload = self._build_semantic_text_payload(task_context, info, world_state_dict)
         self._last_forward_record = {
+            "feature_schema_version": STATE_ENCODER_FEATURE_SCHEMA_VERSION,
             "input_variant": self.input_variant,
             "context_variant": self.context_variant,
             "text_encoder_model": self.text_encoder_model,
@@ -494,8 +500,27 @@ class StateEncoder(nn.Module):
                 trimmed = trimmed[:200] + "..."
             _append("instruction", f"Task: {trimmed}", "instruction")
 
-        task_objects = [str(x) for x in (task_context.get("objects", []) or []) if x]
-        task_receptacles = [str(x) for x in (task_context.get("receptacles", []) or []) if x]
+        task_objects = list(
+            dict.fromkeys(
+                str(x)
+                for x in (
+                    list(task_context.get("objects", []) or [])
+                    + list(task_context.get("object_handles", []) or [])
+                )
+                if x
+            )
+        )
+        task_receptacles = list(
+            dict.fromkeys(
+                str(x)
+                for x in (
+                    list(task_context.get("receptacles", []) or [])
+                    + list(task_context.get("receptacle_handles", []) or [])
+                    + list(task_context.get("floor_target_rooms", []) or [])
+                )
+                if x
+            )
+        )
         task_rooms = [str(x) for x in (task_context.get("rooms", []) or []) if x]
         task_entities = [str(x) for x in (task_context.get("entities", []) or []) if x]
         source_object_classes = [
@@ -693,18 +718,34 @@ class StateEncoder(nn.Module):
             "action_history_cap": float(action_history_cap),
         }
 
+        def _find_entity(
+            name: str, collection: Dict[str, Any]
+        ) -> Optional[Dict[str, Any]]:
+            direct = collection.get(name)
+            if isinstance(direct, dict):
+                return direct
+            for entity_name, entity_data in collection.items():
+                aliases = entity_data.get("aliases", []) if entity_data else []
+                if name == str(entity_name) or name in {str(v) for v in aliases}:
+                    return entity_data
+            return None
+
         def _get_pos(name: str) -> Optional[np.ndarray]:
-            obj_data = object_positions.get(name)
-            if obj_data and "position" in obj_data:
-                return np.asarray(obj_data["position"], dtype=np.float32)
-            furn_data = furniture_positions.get(name)
-            if furn_data and "position" in furn_data:
-                return np.asarray(furn_data["position"], dtype=np.float32)
+            for collection in (object_positions, furniture_positions):
+                entity_data = _find_entity(name, collection)
+                if entity_data and "position" in entity_data:
+                    return np.asarray(entity_data["position"], dtype=np.float32)
             return None
 
         task_objects = [str(x) for x in (task_context.get("objects", []) or []) if x]
+        task_object_handles = [
+            str(x) for x in (task_context.get("object_handles", []) or []) if x
+        ]
         task_entities = [str(x) for x in (task_context.get("entities", []) or []) if x]
         task_receptacles = [str(x) for x in (task_context.get("receptacles", []) or []) if x]
+        task_receptacle_handles = [
+            str(x) for x in (task_context.get("receptacle_handles", []) or []) if x
+        ]
         task_rooms = [str(x) for x in (task_context.get("rooms", []) or []) if x]
         source_furniture_names = [
             str(x) for x in (task_context.get("source_furniture_names", []) or []) if x
@@ -713,14 +754,17 @@ class StateEncoder(nn.Module):
             str(x) for x in (task_context.get("source_allowed_regions", []) or []) if x
         ]
 
-        candidate_objects = task_objects if task_objects else task_entities
+        canonical_task_objects = task_object_handles or task_objects
+        candidate_objects = list(dict.fromkeys(canonical_task_objects + task_entities))
         task_obj_positions = [pos for name in candidate_objects if (pos := _get_pos(name)) is not None]
         task_target_anchors: List[str] = []
         for anchor_name in (
             list(task_receptacles)
+            + list(task_receptacle_handles)
             + list(source_furniture_names)
             + list(task_rooms)
             + list(source_allowed_regions)
+            + list(task_context.get("floor_target_rooms", []) or [])
         ):
             if anchor_name and anchor_name not in task_target_anchors:
                 task_target_anchors.append(anchor_name)
@@ -755,14 +799,16 @@ class StateEncoder(nn.Module):
             min_task_obj_dist = min(dists)
             mean_task_obj_dist = float(sum(dists) / len(dists))
         else:
-            min_task_obj_dist = distance_norm
-            mean_task_obj_dist = distance_norm
+            # Unknown/unobserved is encoded as zero distance plus a zero
+            # visibility fraction below; it is no longer conflated with far.
+            min_task_obj_dist = 0.0
+            mean_task_obj_dist = 0.0
 
         if agent_pos is not None and target_positions:
             target_dists = [float(np.linalg.norm(agent_pos - p)) for p in target_positions]
             min_agent_target_dist = min(target_dists)
         else:
-            min_agent_target_dist = distance_norm
+            min_agent_target_dist = 0.0
 
         if task_obj_positions and target_positions:
             obj_target_dists = [
@@ -772,17 +818,20 @@ class StateEncoder(nn.Module):
             min_obj_target_dist = min(obj_target_dists)
             mean_obj_target_dist = float(sum(obj_target_dists) / len(obj_target_dists))
         else:
-            min_obj_target_dist = distance_norm
-            mean_obj_target_dist = distance_norm
+            min_obj_target_dist = 0.0
+            mean_obj_target_dist = 0.0
 
-        if task_objects and task_receptacles:
-            target_set = set(task_receptacles)
+        if canonical_task_objects and task_target_anchors:
+            target_set = set(task_target_anchors)
             at_target = 0
-            for name in task_objects:
-                parent = object_positions.get(name, {}).get("parent")
+            for name in canonical_task_objects:
+                object_data = _find_entity(name, object_positions) or {}
+                parent = object_data.get("parent")
                 if parent in target_set:
                     at_target += 1
-            fraction_at_target = float(at_target / max(len(task_objects), 1))
+            fraction_at_target = float(
+                at_target / max(len(canonical_task_objects), 1)
+            )
         else:
             fraction_at_target = 0.0
 
@@ -792,15 +841,21 @@ class StateEncoder(nn.Module):
         _append(_norm_dist(min_obj_target_dist), "min_obj_target_dist_norm")
         _append(_norm_dist(mean_obj_target_dist), "mean_obj_target_dist_norm")
         _append(fraction_at_target, "task_object_fraction_at_target")
-        _append(_norm_count(len(task_objects)), "task_object_count_norm")
-        _append(_norm_count(len(task_receptacles)), "task_target_count_norm")
+        _append(_norm_count(len(canonical_task_objects)), "task_object_count_norm")
+        _append(_norm_count(len(task_target_anchors)), "task_target_count_norm")
         _append(_norm_count(len(task_entities)), "task_entity_count_norm")
         _append(_norm_count(len(task_rooms)), "task_room_count_norm")
         _append(_norm_count(total), "task_proposition_count_norm")
 
-        visible_task_objects = [name for name in task_objects if name in object_positions]
+        visible_task_objects = [
+            name
+            for name in canonical_task_objects
+            if _find_entity(name, object_positions) is not None
+        ]
         visible_task_targets = list(resolved_target_anchors)
-        task_object_visible_fraction = float(len(visible_task_objects) / max(len(task_objects), 1))
+        task_object_visible_fraction = float(
+            len(visible_task_objects) / max(len(canonical_task_objects), 1)
+        )
         target_visibility_denominator = len(task_target_anchors)
         task_target_visible_fraction = float(
             len(visible_task_targets) / max(target_visibility_denominator, 1)
@@ -818,15 +873,27 @@ class StateEncoder(nn.Module):
             for data in agent_holdings.values()
             if data.get("held_object")
         ]
-        held_task_objects = [name for name in held_objects if name in task_objects]
+        task_object_identity = set(task_objects) | set(task_object_handles)
+        for name in canonical_task_objects:
+            entity_data = _find_entity(name, object_positions) or {}
+            task_object_identity.update(
+                str(value) for value in entity_data.get("aliases", []) or []
+            )
+        held_task_objects = [
+            name for name in held_objects if name in task_object_identity
+        ]
         any_agent_holding = 1.0 if held_objects else 0.0
         any_agent_holding_task = 1.0 if held_task_objects else 0.0
         primary_held = (
             agent_holdings.get(primary_id, {}).get("held_object") if primary_id is not None else None
         )
         primary_holding = 1.0 if primary_held else 0.0
-        primary_holding_task = 1.0 if primary_held and primary_held in task_objects else 0.0
-        held_task_fraction = float(len(held_task_objects) / max(len(task_objects), 1))
+        primary_holding_task = (
+            1.0 if primary_held and primary_held in task_object_identity else 0.0
+        )
+        held_task_fraction = float(
+            len(held_task_objects) / max(len(canonical_task_objects), 1)
+        )
 
         _append(any_agent_holding, "any_agent_holding")
         _append(any_agent_holding_task, "any_agent_holding_task_object")
@@ -838,7 +905,7 @@ class StateEncoder(nn.Module):
             hold_dists = [float(np.linalg.norm(agent_pos - p)) for p in target_positions]
             min_hold_target_dist = min(hold_dists)
         else:
-            min_hold_target_dist = distance_norm
+            min_hold_target_dist = 0.0
         _append(_norm_dist(min_hold_target_dist), "min_agent_target_dist_when_holding_norm")
 
         action_history = info.get("action_history", []) if isinstance(info, dict) else []
@@ -871,20 +938,8 @@ class StateEncoder(nn.Module):
         info: Optional[Dict[str, Any]],
         task_context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[int, int]:
-        tracker = {}
-        if isinstance(info, dict):
-            tracker = info.get("auto_eval_proposition_tracker", {}) or {}
-        satisfied_at = tracker.get("proposition_satisfied_at", []) or []
-        if isinstance(satisfied_at, (list, tuple)):
-            total = len(satisfied_at)
-            satisfied = sum(1 for value in satisfied_at if value is not None and int(value) >= 0)
-            return satisfied, total
-        proposition_count = 0
-        if task_context:
-            proposition_count = int(task_context.get("proposition_count") or 0)
-        elif isinstance(info, dict):
-            proposition_count = int(info.get("proposition_count") or 0)
-        return 0, proposition_count
+        outcome = proposition_outcome_from_info(info, task_context)
+        return outcome.satisfied_count, outcome.total
 
     def _extract_planning_step(self, info: Optional[Dict[str, Any]]) -> Optional[int]:
         if not isinstance(info, dict) or "planning_step_count" not in info:
@@ -1006,8 +1061,15 @@ class StateEncoder(nn.Module):
         satisfied, total = self._extract_proposition_progress(info, task_context)
         return {
             "instruction": instruction,
-            "objects": _normalize_list(task_context.get("objects", []) or []),
-            "receptacles": _normalize_list(task_context.get("receptacles", []) or []),
+            "objects": _normalize_list(
+                list(task_context.get("objects", []) or [])
+                + list(task_context.get("object_handles", []) or [])
+            ),
+            "receptacles": _normalize_list(
+                list(task_context.get("receptacles", []) or [])
+                + list(task_context.get("receptacle_handles", []) or [])
+                + list(task_context.get("floor_target_rooms", []) or [])
+            ),
             "entities": _normalize_list(task_context.get("entities", []) or []),
             "rooms": _normalize_list(task_context.get("rooms", []) or []),
             "proposition_count": int(task_context.get("proposition_count") or 0),
@@ -1092,6 +1154,7 @@ class StateEncoder(nn.Module):
         if not self._meta_logged_for_key:
             meta_payload = {
                 "record_type": "meta",
+                "feature_schema_version": STATE_ENCODER_FEATURE_SCHEMA_VERSION,
                 "episode_id": episode_id,
                 "episode_filename": episode_filename,
                 "text_dim": self.text_dim,

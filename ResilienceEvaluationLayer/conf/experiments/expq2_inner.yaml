@@ -14,8 +14,8 @@ expq2_inner:
   subexperiments:
     internal_stress_proxy:
       enabled: true
-      argument: "在当前 context_evolve proxy 定义下，内部 context/memory 压力会放大同等外部扰动的影响。"
-      headline_metric: "ge_contract_margin_min"
+      argument: "Evaluate whether internal context/memory stress amplifies the effect of an equivalent external perturbation under the current context_evolve proxy."
+      headline_metric: "ge_margin_soft"
       support_metrics:
         - "rebound_c_rec"
         - "stability_beta_neighborhood"

@@ -74,10 +74,11 @@ def fix_config(cfg, root: bool = True) -> None:
         # skip habitat config because this config is missing required param
         keys = [k for k in keys if k not in ["habitat", "habitat_baselines"]]
     for k in keys:
-        if type(cfg[k]) is DictConfig:
-            fix_config(cfg[k], False)
+        value = cfg[k]
+        if type(value) is DictConfig:
+            fix_config(value, False)
         else:
-            setattr(cfg, k, getattr(cfg, k))
+            cfg[k] = value
 
 
 def setup_config(config: DictConfig = None, seed: int = 47668090) -> DictConfig:
@@ -252,4 +253,3 @@ def save_data(save_path: str, save_name: str, data: List[Dict[str, Any]]) -> Non
             f.write(
                 f'{index},{item["instruction"]},{item["minimum_number_of_actions"]},{item["type"]},{item["success"]},{item["score"]},{item["efficiency_score"]},{item["step_count"]},{item["llm_call_count"]},{item["error"]}\n'
             )
-

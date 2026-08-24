@@ -1,0 +1,127 @@
+# @package _global_
+
+defaults:
+  - /baselines/qwen35_centralized_zero_shot_react_summary_vllm_state
+  - /evaluation/resilience_config
+  - _self_
+
+# One joint rollout grid for the three resilience dimensions. Runtime episode
+# rows always contain Rebound and Stability evidence; the condition-level
+# post-process computes beta first and then the GE boundary from those
+# same rows.
+evaluation:
+  max_episode_sim_steps: 18000
+  adca:
+    llm_model: "gpt-5.1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+  critic:
+    llm_model: "gpt-5.1"
+    llm_base_url: "${oc.env:HABITAT_LLM_BASE_URL,http://127.0.0.1:8000/v1}"
+    inference_mode: "deterministic"
+
+expq1:
+  output_subdir: "resilience_joint_qwen35"
+  baseline_model: "baselines/qwen35_centralized_zero_shot_react_summary_vllm_state"
+  optimized_model: null
+  shared:
+    working_set: [78, 131, 304, 75, 144, 98, 239, 174, 290, 258]
+    base_patch:
+      resilience:
+        mode: "joint"
+        seeds: [0, 1, 2]
+        output_subdir: "resilience"
+        execution:
+          max_parallel_workers: 1
+          episodes_per_worker: 1
+          min_available_memory_gb: 48
+        stage_baseline:
+          enabled: true
+          evidence_store_enabled: true
+          reuse_policy: "reuse_and_extend"
+          extension_samples_per_episode: 0
+          episode_aggregate:
+            enabled: true
+            fallback_when_hash_missing: true
+            merge_existing: true
+            allow_partial_compose: false
+
+  subexperiments:
+    joint_resilience_evaluation:
+      enabled: true
+      argument: >-
+        Evaluate Rebound, Stability and Graceful Extensibility from one shared
+        clean-to-stress rollout grid for every episode id.
+      headline_metric: "ge_boundary_lambda_star"
+      support_metrics:
+        - "rebound_c_rec"
+        - "rebound_c_rec_valid"
+        - "rebound_c_rec_cog"
+        - "rebound_c_rec_phy"
+        - "rebound_c_rec_state_debt"
+        - "rebound_num_recovery_windows"
+        - "stability_beta_neighborhood"
+        - "stability_beta_neighborhood_valid"
+        - "stability_beta_trajectory"
+        - "stability_beta_out"
+        - "stability_beta_oscillation"
+        - "stability_beta_action"
+        - "stability_beta_progress"
+        - "stability_beta_success"
+        - "stability_td_error_mean_abs"
+        - "stability_gae_mean_abs"
+        - "ge_margin_soft"
+        - "ge_margin_hard"
+        - "ge_audc_f"
+        - "ge_audc_norm_f"
+        - "ge_valid_lambda_coverage"
+        - "ge_degradation_rate"
+        - "ge_boundary_hit"
+        - "ge_hard_boundary_hit"
+        - "ge_cell_valid"
+        - "task_percent_complete"
+        - "task_state_success"
+        - "sim_step_count"
+        - "replanning_count_0"
+        - "replanning_count_1"
+      summary_metrics:
+        - "rebound_c_rec"
+        - "rebound_c_rec_valid"
+        - "stability_beta_neighborhood"
+        - "stability_beta_neighborhood_valid"
+        - "stability_beta_trajectory"
+        - "stability_beta_out"
+        - "ge_margin_soft"
+        - "ge_margin_hard"
+        - "ge_audc_f"
+        - "ge_audc_norm_f"
+        - "ge_boundary_lambda_star"
+        - "ge_valid_lambda_coverage"
+        - "ge_cell_valid"
+        - "task_percent_complete"
+        - "task_state_success"
+        - "sim_step_count"
+      episode_ids: [78, 131, 304, 75, 144, 98, 239, 174, 290, 258]
+      # Ordering matters: GE consumes lambda-local Stability values added by
+      # the first post-processor.
+      postprocess: ["stability", "margin"]
+      summary_group_keys:
+        - "condition_name"
+        - "task_family"
+        - "stress_family"
+        - "stress_lambda"
+      phases:
+        # One phase keeps clean and all five positive levels behind the same
+        # seed barrier: finish every seed-0 cell before admitting seed 1.
+        - label: "stress_sweep"
+          patch:
+            resilience:
+              mode: "joint"
+              seeds: [0, 1, 2]
+              perturbations: ["clean", "llm_instruction_context_stress"]
+              intensities: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+              perturbation_extras:
+                llm_instruction_context_stress:
+                  stress_family: "llm_instruction_context_stress"
+                  bank_path: "evaluation/perturbation_banks/instruction_context_v6"
+                  variant_by_seed: {"0": "variant_0", "1": "variant_1", "2": "variant_2"}
+                  text_dose_tolerance: 0.075

@@ -33,31 +33,26 @@ We need to configure a handful of parameters in order to start logging the above
 habitat-llm. These parameters are read from [here](../conf/trajectory/trajectory_logger.yaml).
 
 ```yaml
-save: True
-agent_names: ['agent_1']  # list of all agents to log
-save_path: 'data/traj0'  # root of data where to log data
-save_options: ["rgb", "depth", "pose"]  # modalities to log during execution
-  # rgb: accesses agent_N_articulated_agent_arm_rgb camera
-  # depth: accesses agent_N_articulated_agent_arm_depth camera
-  # pose: logs agent_N_articulated_agent_arm_rgb camera pose
+save: true
+agent_names: ["agent_0"]
+camera_prefixes: ["articulated_agent_jaw"]
+save_path: "data/traj0"
+save_options: ["rgb", "depth", "pose"]
 ```
 
-They can be accessed via: `conf.trajectory` config variable in code. In order to execute
-a run with logging enabled, use the following command:
+The settings are available through `config.trajectory`. Run the maintained
+multi-agent example with trajectory logging enabled as follows:
 
-```
+```bash
 HYDRA_FULL_ERROR=1 python -m habitat_llm.examples.planner_demo --config-name examples/planner_multi_agent_demo_config.yaml \
- planner='habitat_centralized_planner_multi_agent' \
- llm@planner.llm=llama2 \
- mode='cli' \
- partial_obs='False' \
- habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
- llm@planner.llm=openai_chat \
- trajectory.save=True \
- instruction="send agent_0 to all receptacles in the environment"
+  mode=cli \
+  world_model.partial_obs=false \
+  trajectory.save=true \
+  trajectory.save_path=data/traj0 \
+  instruction="send agent_0 to all receptacles in the environment"
 ```
 
-Make sure you have created the output directory for above run code to store data in:
+Create the output directory before starting the run:
 `mkdir data/traj0`
 
 Output directory is expected to have following organization if everything is set up
@@ -65,19 +60,6 @@ correctly:
 
 ```txt
 |-agent0/
-|-|-rgb/
-|-|-|-rgb0.png
-|-|-|-rgb1.png
-|-|-|-...
-|-|-depth/
-|-|-|-depth0.npy
-|-|-|-depth1.npy
-|-|-|-...
-|-|-pose/
-|-|-|-pose0.npy
-|-|-|-pose1.npy
-|-|-|-...
-|-agent1/
 |-|-rgb/
 |-|-|-rgb0.png
 |-|-|-rgb1.png
@@ -98,7 +80,8 @@ Please follow the instructions provided in [our fork](https://github.com/zephire
 
 ## Running the Non-privileged Baseline
 
-After spawning your LLM servers use the following command to reproduce baseline as reported in PARTNR paper:
+After starting the required LLM backends, use the following command to run the
+non-privileged baseline:
 
 ```bash
 python -m habitat_llm.examples.planner_demo --config-name baselines/decentralized_zero_shot_react_summary_nn.yaml \
@@ -115,7 +98,4 @@ python -m habitat_llm.examples.planner_demo --config-name baselines/decentralize
   num_proc=4 \
   paths.results_dir=/path/to/your/output/directory \
   evaluation.output_dir=/path/to/your/output/directory
-```
-
-```
 ```

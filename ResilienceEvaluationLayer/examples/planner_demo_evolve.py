@@ -15,7 +15,6 @@ import json
 import sys
 import time
 import traceback
-import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -29,6 +28,10 @@ from habitat_llm.agent.env.evaluation.evaluation_functions import (
     aggregate_measures,
 )
 from habitat_llm.utils import cprint, setup_config, fix_config
+from habitat_llm.config_redaction import (
+    redacted_config_yaml,
+    write_redacted_config_copy,
+)
 from habitat_llm.agent.env import (
     EnvironmentInterface,
     register_actions,
@@ -41,6 +44,7 @@ from habitat_llm.evaluation import (
     DecentralizedEvaluationRunner,
     EvaluationRunner,
 )
+from habitat_llm.evaluation.reporting import RUNTIME_METRIC_KEYS
 from habitat_llm.evaluation.evolve.context_evolve import (
     EvolutionContextManager,
     apply_evolution_context,
@@ -52,9 +56,8 @@ from habitat_baselines.utils.info_dict import extract_scalars_from_info
 
 
 def clear_memory():
-    """Clear Python and PyTorch memory cache."""
+    """Release cyclic Python objects between Habitat episodes."""
     gc.collect()
-    return
 
 
 def get_output_file(config, env_interface):
@@ -103,7 +106,7 @@ def write_config(config):
     output_file = os.path.join(config.paths.results_dir, dataset_file)
     os.makedirs(output_file, exist_ok=True)
     with open(f"{output_file}/config.yaml", "w+") as f:
-        f.write(OmegaConf.to_yaml(config))
+        f.write(redacted_config_yaml(config))
 
     planner_configs = []
     suffixes = []
@@ -124,8 +127,9 @@ def write_config(config):
             if len(yaml_rlm_path) > 0:
                 yaml_rlm_file = f"{yaml_rlm_path}/config.yaml"
                 if os.path.isfile(yaml_rlm_file):
-                    shutil.copy(
-                        yaml_rlm_file, f"{output_file}/config_rlm{suffix_rlm}.yaml"
+                    write_redacted_config_copy(
+                        yaml_rlm_file,
+                        f"{output_file}/config_rlm{suffix_rlm}.yaml",
                     )
 
 
@@ -334,69 +338,8 @@ def run_planner_evolve(config, dataset: CollaborationDatasetV0):
                     "sim_step_count",
                     "replanning_count",
                     "runtime",
-                    "rebound_mttr",
-                    "rebound_mtbf",
-                    "rebound_count",
-                    "rebound_c_rec",
-                    "rebound_c_rec_cog",
-                    "rebound_c_rec_phy",
-                    "rebound_c_rec_state_debt",
-                    "rebound_c_rec_plan",
-                    "rebound_c_rec_sim",
-                    "rebound_num_recovery_windows",
-                    "rebound_raw_window_count",
-                    "rebound_formal_window_count",
-                    "rebound_skipped_window_count",
-                    "rebound_c_rec_valid",
-                    "rebound_c_rec_missing_reason",
-                    "rebound_baseline_match_level",
-                    "rebound_w_rem_star",
-                    "rebound_g_rec_total",
-                    "stability_beta",
-                    "stability_beta_neighborhood",
-                    "stability_beta_vv",
-                    "stability_beta_out",
-                    "stability_beta_oscillation",
-                    "stability_beta_action",
-                    "stability_beta_progress",
-                    "stability_beta_success",
-                    "stability_beta_perturbation",
-                    "stability_beta_perturbation_vv",
-                    "stability_beta_perturbation_out",
-                    "stability_beta_perturbation_oscillation",
-                    "stability_beta_perturbation_action",
-                    "stability_beta_perturbation_progress",
-                    "stability_beta_perturbation_success",
-                    "stability_beta_perturbation_valid",
-                    "stability_beta_perturbation_scope",
-                    "stability_clean_ref_valid",
-                    "stability_clean_ref_strategy",
-                    "stability_n_clean_ref",
-                    "stability_beta_neighborhood_valid",
-                    "stability_beta_neighborhood_missing_reason",
-                    "stability_beta_scope",
-                    "stability_p_cbf",
-                    "stability_td_error_mean_abs",
-                    "stability_td_error_p95_abs",
-                    "stability_gae_mean_abs",
-                    "stability_gae_p95_abs",
-                    "stability_return_target_variance",
-                    "stability_oscillation_loss",
-                    "stability_oscillation_loss_valid",
-                    "stability_oscillation_source",
-                    "stability_critic_trace_len",
-                    "stability_value_delta_variance",
-                    "safety_collision_rate",
-                    "safety_score",
-                    "ge_contract_margin_min",
-                    "ge_audc_f",
-                    "ge_cell_valid",
-                    "ge_cell_missing_reason",
-                    "ge_valid_lambda_coverage",
-                    "ge_boundary_lambda_star",
-                    "ge_boundary_hit",
-                    "ge_hard_boundary_hit",
                 }
+                stats_keys.update(RUNTIME_METRIC_KEYS)
 
                 if "replanning_count" in info and isinstance(
                     info["replanning_count"], dict
@@ -404,10 +347,6 @@ def run_planner_evolve(config, dataset: CollaborationDatasetV0):
                     for agent_id, replan_count in info["replanning_count"].items():
                         stats_keys.add(f"replanning_count_{agent_id}")
                         info[f"replanning_count_{agent_id}"] = replan_count
-
-                for key in list(info.keys()):
-                    if key.startswith("rebound_"):
-                        stats_keys.add(key)
 
                 stats_episode = extract_scalars_from_info(
                     info, ignore_keys=info.keys() - stats_keys

@@ -27,6 +27,7 @@ expq1:
       argument: "Validate that binary success can hide recovery cost, especially cognitive recovery cost under perturbation."
       headline_metric: "rebound_c_rec"
       support_metrics:
+        - "rebound_c_rec_index_100"
         - "rebound_c_rec_cog"
         - "rebound_c_rec_phy"
         - "rebound_c_rec_state_debt"
@@ -52,13 +53,12 @@ expq1:
       argument: "Validate that neighborhood stability captures semantic/action consistency under perturbation, not only success-rate changes."
       headline_metric: "stability_beta_neighborhood"
       support_metrics:
-        - "stability_beta_vv"
+        - "stability_beta_trajectory"
         - "stability_beta_out"
         - "stability_beta_action"
         - "stability_beta_progress"
         - "stability_beta_success"
         - "stability_beta_neighborhood_valid"
-        - "stability_beta"
       episode_ids: [126, 127, 78, 129, 125, 1, 9, 60]
       postprocess: ["stability"]
       summary_group_keys: ["condition_name", "perturbation_type", "perturbation_intensity"]
@@ -74,7 +74,7 @@ expq1:
     ge_validity:
       enabled: true
       argument: "Validate GE as a stress-response capacity metric: h_i(lambda) -> r_f(lambda) -> M_f(lambda) -> lambda_f^*, D_f(lambda), rather than a restatement of binary success."
-      headline_metric: "ge_cpsc_lambda_star"
+      headline_metric: "ge_boundary_lambda_star"
       support_metrics:
         - "ge_margin_soft"
         - "ge_margin_hard"
@@ -90,23 +90,20 @@ expq1:
         - "task_state_success_rate"
       episode_ids: [78, 127, 126, 11, 79, 80, 81, 129, 125, 1, 9, 60, 73, 168, 237]
       postprocess: ["stability", "margin"]
-      summary_group_keys: ["condition_name", "task_family", "stress_lambda"]
+      summary_group_keys: ["condition_name", "task_family", "stress_family", "stress_lambda"]
       phases:
-        - label: "clean_reference"
-          patch:
-            resilience:
-              mode: "margin"
-              perturbations: ["clean"]
-              seeds: [0]
-              intensities: [0.0]
-              contract_margin:
-                stress_lambdas: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
         - label: "stress_sweep"
           patch:
             resilience:
               mode: "margin"
-              perturbations: ["irrelevant_perturbation"]
-              seeds: [0]
-              intensities: [0.2, 0.4, 0.6, 0.8, 1.0]
-              contract_margin:
+              perturbations: ["clean", "llm_instruction_context_stress"]
+              seeds: [0, 1, 2]
+              intensities: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+              perturbation_extras:
+                clean:
+                  stress_family: "llm_instruction_context_stress"
+                  bank_path: "evaluation/perturbation_banks/instruction_context_v6"
+                  variant_by_seed: {0: "variant_0", 1: "variant_1", 2: "variant_2"}
+                  text_dose_tolerance: 0.075
+              boundary_margin:
                 stress_lambdas: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]

@@ -135,4 +135,3 @@ class ValueNetwork(nn.Module):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0.0)
-

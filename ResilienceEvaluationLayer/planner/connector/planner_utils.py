@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from habitat_llm.planner.miqp_planner.params_module.scenario_params_task import ScenarioConfigTask
 
 def extract_json_from_text(text: str, target_type: type = dict) -> Optional[str]:
-    """从可能包含额外文本的LLM响应中提取JSON片段。"""
+    """Extract a JSON fragment from an LLM response with surrounding text."""
     if target_type == dict:
         start_char, end_char = '{', '}'
     elif target_type == list:
@@ -24,7 +24,7 @@ def extract_json_from_text(text: str, target_type: type = dict) -> Optional[str]
     return None
 
 def get_llm_config() -> Dict[str, Any]:
-    """llm_planner中的配置"""
+    """Return the role-tag configuration for the LLM planner."""
     return {
         'system_tag': '[SYSTEM]',
         'user_tag': '[USER]', 
@@ -43,7 +43,7 @@ def update_param_value(scenario_config: Union[Dict[str, Any], Any], key: str, va
             elif hasattr(scenario_config, 'update_global_task_var'):
                 scenario_config.update_global_task_var(key, value)
         except AttributeError:
-            print(f"Error: scenario_config 既不是字典也没有适当的更新方法")
+            print(f"Error: scenario_config is neither a dictionary nor an object with a supported update method")
 
 def normalize_task_list(
     tasks: List[Dict[str, Any]],
@@ -128,4 +128,3 @@ def normalize_task_list(
             task["prerequisites"] = [p for p in prereqs if p in valid_ids]
 
     return normalized_tasks
-

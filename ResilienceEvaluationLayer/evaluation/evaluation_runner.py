@@ -11,6 +11,7 @@ The module includes classes for tracking action and state history during evaluat
 """
 
 import copy
+import json
 import logging
 import os
 import time
@@ -31,6 +32,10 @@ from habitat_llm.utils import cprint, rollout_print
 from habitat_llm.utils.sim import init_agents
 from habitat_llm.world_model import Entity, WorldGraph
 from habitat_llm.evaluation.core import CriticUpdater, WorldStateBuilder
+from habitat_llm.evaluation.proposition_outcome import (
+    materialize_proposition_outcome,
+)
+from habitat_llm.evaluation.reporting import primary_display_items
 from habitat_llm.evaluation.runner_analysis import EvaluationAnalysisCoordinator
 from habitat.tasks.rearrange.utils import coll_name_matches
 
@@ -127,6 +132,11 @@ class EvaluationRunner:
         self.agents: Dict[int, Agent] = {}
 
         self.episode_filename = ""
+        # ``current_instruction`` remains the backwards-compatible planner
+        # view.  Keep the pre-perturbation task and the planner-visible task
+        # separate so reward shaping never evaluates a rewritten goal.
+        self.canonical_instruction = ""
+        self.policy_instruction = ""
         self.current_instruction = ""
 
         # Initialize the agents
@@ -147,6 +157,7 @@ class EvaluationRunner:
         # the Stability / Graceful-Extensibility experiments). Defaults to
         # ``None`` so the standard evaluation path is unaffected.
         self.perturbation_injector: Optional[Any] = None
+        self.perturbation_audit: Dict[str, Any] = {}
 
         # Online Rebound tracker (t_d / t_r event stream + semantic templates).
         # Built lazily on the first call to _ensure_rebound_tracker so that
@@ -169,7 +180,7 @@ class EvaluationRunner:
             evaluation_runner_config=self.evaluation_runner_config,
             env_interface=self.env_interface,
         )
-        # Keep this attribute for compatibility with planner_demo_mp(_new).
+        # Keep this attribute for compatibility with planner_demo_mp_new.
         self.adca_analyzer = self.analysis_coordinator.adca_analyzer
 
     def _set_critic(self, critic: Optional[Any]) -> None:
@@ -246,93 +257,9 @@ class EvaluationRunner:
             print("  (no metrics)")
             return
 
-        preferred_order = [
-            "task_state_success",
-            "task_percent_complete",
-            "sim_step_count",
-            "runtime",
-            "replanning_count",
-            # Rebound
-            "rebound_c_rec",
-            "rebound_c_rec_cog",
-            "rebound_c_rec_phy",
-            "rebound_c_rec_state_debt",
-            "rebound_num_recovery_windows",
-            "rebound_raw_window_count",
-            "rebound_formal_window_count",
-            "rebound_skipped_window_count",
-            "rebound_c_rec_valid",
-            "rebound_c_rec_missing_reason",
-            "rebound_baseline_match_level",
-            "rebound_w_rem_star",
-            "rebound_g_rec_total",
-            "rebound_baseline_loaded",
-            "rebound_tracker_window_count",
-            "rebound_tracker_window_open_final",
-            # Stability
-            "stability_beta",
-            "stability_beta_neighborhood",
-            "stability_beta_vv",
-            "stability_beta_out",
-            "stability_beta_oscillation",
-            "stability_beta_action",
-            "stability_beta_progress",
-            "stability_beta_success",
-            "stability_beta_perturbation",
-            "stability_beta_perturbation_vv",
-            "stability_beta_perturbation_out",
-            "stability_beta_perturbation_oscillation",
-            "stability_beta_perturbation_action",
-            "stability_beta_perturbation_progress",
-            "stability_beta_perturbation_success",
-            "stability_beta_perturbation_valid",
-            "stability_beta_perturbation_scope",
-            "stability_clean_ref_valid",
-            "stability_clean_ref_strategy",
-            "stability_n_clean_ref",
-            "stability_beta_neighborhood_valid",
-            "stability_beta_neighborhood_missing_reason",
-            "stability_beta_scope",
-            "stability_td_error_mean_abs",
-            "stability_td_error_p95_abs",
-            "stability_gae_mean_abs",
-            "stability_gae_p95_abs",
-            "stability_return_target_variance",
-            "stability_oscillation_loss",
-            "stability_oscillation_loss_valid",
-            "stability_oscillation_source",
-            "stability_critic_trace_len",
-            # Degradation / Graceful Extensibility
-            "degradation_auc_loss",
-            "degradation_p_cliff",
-            "degradation_l_bd",
-            "ge_contract_margin_min",
-            "ge_audc_f",
-            "ge_cell_valid",
-            "ge_cell_missing_reason",
-            "ge_valid_lambda_coverage",
-            "ge_boundary_lambda_star",
-            "ge_boundary_hit",
-            "ge_hard_boundary_hit",
-            "resilience_score",
-            "resilience_availability",
-            "copal_rsr",
-            "copal_mttr",
-            "copal_mtbf",
-        ]
-        ordered_keys = [key for key in preferred_order if key in metrics]
-        if ordered_keys:
-            ordered_key_set = set(ordered_keys)
-            ordered_keys.extend(
-                key
-                for key in sorted(metrics.keys())
-                if key.startswith("replanning_count_") and key not in ordered_key_set
-            )
-        else:
-            ordered_keys = sorted(metrics.keys())
-
-        for key in ordered_keys:
-            print(f"  {key}: {self._format_display_metric_value(metrics[key])}")
+        display_items = primary_display_items(metrics)
+        for key, value in display_items:
+            print(f"  {key}: {self._format_display_metric_value(value)}")
 
     def print_secondary_display_metrics(
         self, header: str, metrics: Optional[Dict[str, Any]]
@@ -378,6 +305,8 @@ class EvaluationRunner:
 
         # Reset filenames
         self.episode_filename = ""
+        self.canonical_instruction = ""
+        self.policy_instruction = ""
         self.current_instruction = ""
 
         # Reset planners and the agents owned by the planners
@@ -434,6 +363,62 @@ class EvaluationRunner:
             if key in planner_info:
                 compact[key] = copy.deepcopy(planner_info[key])
         return compact
+
+    @staticmethod
+    def _compact_planner_info_for_episode_history(
+        planner_info: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Keep metric/log fields without retaining planner object graphs per sim step."""
+        compact: Dict[str, Any] = {}
+        for key in (
+            "stats",
+            "replanning_count",
+            "total_step_count",
+            "sim_step_count",
+            "high_level_actions",
+            "responses",
+            "replanned",
+            "replan_required",
+            "agent_states",
+            "is_done",
+            "autofill_actions",
+            "termination_reason",
+            "agent_collisions",
+            "agent_collision_scope",
+            "_context_compression_events",
+        ):
+            if key in planner_info:
+                compact[key] = copy.deepcopy(planner_info[key])
+        replanned = compact.get("replanned", {}) or {}
+        if (
+            isinstance(replanned, dict)
+            and any(bool(value) for value in replanned.values())
+            and "curr_graph" in planner_info
+        ):
+            compact["curr_graph"] = copy.deepcopy(planner_info["curr_graph"])
+        return compact
+
+    @staticmethod
+    def _is_planner_history_event(planner_info: Dict[str, Any]) -> bool:
+        replanned = planner_info.get("replanned", {}) or {}
+        responses = planner_info.get("responses", {}) or {}
+        return bool(
+            (isinstance(replanned, dict) and any(replanned.values()))
+            or (not isinstance(replanned, dict) and replanned)
+            or (isinstance(responses, dict) and any(responses.values()))
+            or planner_info.get("termination_reason")
+            or planner_info.get("is_done")
+            or planner_info.get("_context_compression_events")
+        )
+
+    def _retain_full_action_history_world_graph(self) -> bool:
+        return bool(
+            getattr(
+                self.evaluation_runner_config,
+                "retain_action_history_world_graph",
+                True,
+            )
+        )
 
     @staticmethod
     def _format_action_sequence_token(agent_id: Any, action_tuple: Any) -> str:
@@ -582,7 +567,8 @@ class EvaluationRunner:
     def _ensure_rebound_tracker(self, episode: Optional[Any] = None) -> Optional[Any]:
         """Lazily construct the :class:`OnlineReboundTracker`.
 
-        Controlled by ``evaluation.rebound_tracker.enabled`` (default True).
+        Controlled by ``evaluation.resilience.rebound_windows.enabled``;
+        ``evaluation.rebound_tracker`` remains a legacy config alias.
         The tracker stays attached to the runner across episodes and is
         re-initialised per-episode via ``tracker.reset(episode)``.
         """
@@ -592,8 +578,14 @@ class EvaluationRunner:
             tracker_cfg = cfg.get("rebound_tracker") if hasattr(cfg, "get") else None
         except Exception:
             tracker_cfg = None
+        if tracker_cfg is None and hasattr(cfg, "get"):
+            resilience_cfg = cfg.get("resilience")
+            if resilience_cfg is not None and hasattr(resilience_cfg, "get"):
+                tracker_cfg = resilience_cfg.get("rebound_windows")
         enabled = True
         template_config = None
+        recovery_confirmation_steps = 2
+        immediate_recovery_templates = ["T1", "T2"]
         if tracker_cfg is not None:
             try:
                 from omegaconf import OmegaConf as _OC
@@ -603,42 +595,47 @@ class EvaluationRunner:
             if isinstance(tracker_cfg, dict):
                 enabled = bool(tracker_cfg.get("enabled", True))
                 template_config = tracker_cfg.get("templates")
+                recovery_confirmation_steps = int(
+                    tracker_cfg.get("recovery_confirmation_steps", 2)
+                )
+                immediate_recovery_templates = list(
+                    tracker_cfg.get(
+                        "immediate_recovery_templates",
+                        ["T1", "T2"],
+                    )
+                )
         if not enabled:
             self.rebound_tracker = None
             return None
         if self.rebound_tracker is None:
             try:
                 from habitat_llm.evaluation.metrics.rebound import OnlineReboundTracker
+
+                perception = getattr(self.env_interface, "perception", None)
                 self.rebound_tracker = OnlineReboundTracker(
                     episode=episode,
                     template_config=template_config,
+                    entity_aliases=getattr(
+                        perception, "sim_handle_to_name", None
+                    ),
+                    room_aliases=getattr(
+                        perception, "region_id_to_name", None
+                    ),
+                    recovery_confirmation_steps=recovery_confirmation_steps,
+                    immediate_recovery_templates=immediate_recovery_templates,
                 )
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("Failed to initialise OnlineReboundTracker: %s", exc)
                 self.rebound_tracker = None
         return self.rebound_tracker
 
-    def _install_prompt_perturbation_hook(self) -> None:
-        """Register :attr:`perturbation_injector`'s prompt hook on all planners.
-
-        Planners that support ``_prompt_perturbation_hook`` will rewrite the
-        instruction immediately before prompt assembly. Planners that don't
-        support the attribute are left untouched (the hook is purely additive).
-        """
+    def _clear_prompt_perturbation_hooks(self) -> None:
+        """Ensure prompt perturbations are applied once, at runner level."""
         if self.perturbation_injector is None:
             return
-        hook = self.perturbation_injector.prompt_hook()
-        planners: List[Any] = []
-        raw_planner = getattr(self, "planner", None)
-        if isinstance(raw_planner, dict):
-            planners.extend(raw_planner.values())
-        elif raw_planner is not None:
-            planners.append(raw_planner)
-        for p in planners:
-            try:
-                setattr(p, "_prompt_perturbation_hook", hook)
-            except Exception:
-                pass
+        self.perturbation_injector.clear_prompt_hooks(
+            getattr(self, "planner", None)
+        )
 
     def initialize_instruction_metadata(
         self, instruction: str, output_name: str
@@ -651,11 +648,19 @@ class EvaluationRunner:
         """
         if instruction is None:
             # Get the instruction from the episode
-            self.current_instruction = (
+            resolved_instruction = (
                 self.env_interface.env.env.env._env.current_episode.instruction
             )
         else:
-            self.current_instruction = instruction
+            resolved_instruction = instruction
+
+        # The canonical instruction is the task resolved at the episode
+        # boundary, before any prompt-level perturbation.  The policy view may
+        # subsequently be rewritten, while ``current_instruction`` continues
+        # to alias that policy view for existing planners and callers.
+        self.canonical_instruction = resolved_instruction
+        self.policy_instruction = resolved_instruction
+        self.current_instruction = self.policy_instruction
         if self.evaluation_runner_config.do_print:
             cprint("Instruction:", "yellow")
             print(self.current_instruction + "\n")
@@ -694,7 +699,12 @@ class EvaluationRunner:
 
     def get_agent_collisions(self) -> Dict[int, bool]:
         """
-        Check if the agents are colliding.
+        Observe pairwise contact between exactly two articulated agents.
+
+        This is not a general scene-collision sensor: it does not cover an
+        agent contacting furniture, obstacles, or the static scene.  Return an
+        empty mapping when the pairwise channel is unavailable so downstream
+        safety accounting cannot manufacture a collision-free observation.
         """
         collision = False
         agent_ids = [
@@ -709,6 +719,9 @@ class EvaluationRunner:
                     cp, agent_ids[1]
                 ):
                     collision = True
+
+        if len(agent_ids) != 2:
+            return {}
 
         out = {}
         for agent_uid in self.agents:
@@ -755,50 +768,61 @@ class EvaluationRunner:
         if "replan_required" not in planner_info:
             return
         high_level_actions = planner_info.get("high_level_actions", {})
+        replanned_agents = [
+            agent_id
+            for agent_id, value in planner_info["replanned"].items()
+            if value
+        ]
+        if not replanned_agents:
+            return
+        # Centralized planners replan both agents at the same instant. Build
+        # one immutable-in-practice snapshot and share it across their history
+        # records instead of duplicating the full WorldGraph object graph.
+        world_graph_snapshot = None
+        if self._retain_full_action_history_world_graph():
+            world_graph_snapshot = {
+                uid: wg.snapshot()
+                for uid, wg in self.env_interface.world_graph.items()
+            }
         # Update the agent states in environment interface
-        for agent_id, value in planner_info["replanned"].items():
-            if value:
-                # An action must be returned if the planner replans
-                world_graph_snapshot = {
-                    uid: wg.snapshot() 
-                    for uid, wg in self.env_interface.world_graph.items()
-                }
-                if agent_id not in high_level_actions:
-                    logger.warning(
-                        "Skipping action-history append for agent %s: missing high_level_action. planner_info keys=%s",
-                        agent_id,
-                        sorted(high_level_actions.keys()),
-                    )
-                    continue
-                action_tuple = high_level_actions[agent_id]
-                bootstrap_response = ""
-                if (
-                    isinstance(action_tuple, tuple)
-                    and len(action_tuple) > 2
-                    and isinstance(action_tuple[2], str)
-                    and len(action_tuple[2]) > 0
-                ):
-                    # Preserve diagnostic actions (e.g., auto-filled no-op) as
-                    # complete action-history records.
-                    bootstrap_response = action_tuple[2]
-                action_history_object = ActionHistoryElement(
-                    action=action_tuple,
-                    timestamp=planner_info["sim_step_count"],
-                    agent_uid=agent_id,
-                    response=bootstrap_response,
-                    # world_graph=copy.deepcopy(self.env_interface.world_graph),
-                    world_graph=world_graph_snapshot,
-                    info={
-                        "planner_info": self._compact_planner_info_for_action_history(
-                            planner_info
-                        ),
-                        "log_time": time.time(),
-                    },
+        for agent_id in replanned_agents:
+            # An action must be returned if the planner replans
+            if agent_id not in high_level_actions:
+                logger.warning(
+                    "Skipping action-history append for agent %s: missing high_level_action. planner_info keys=%s",
+                    agent_id,
+                    sorted(high_level_actions.keys()),
                 )
+                continue
+            action_tuple = high_level_actions[agent_id]
+            bootstrap_response = ""
+            if (
+                isinstance(action_tuple, tuple)
+                and len(action_tuple) > 2
+                and isinstance(action_tuple[2], str)
+                and len(action_tuple[2]) > 0
+            ):
+                # Preserve diagnostic actions (e.g., auto-filled no-op) as
+                # complete action-history records.
+                bootstrap_response = action_tuple[2]
+            action_history_object = ActionHistoryElement(
+                action=action_tuple,
+                timestamp=planner_info["sim_step_count"],
+                agent_uid=agent_id,
+                response=bootstrap_response,
+                # world_graph=copy.deepcopy(self.env_interface.world_graph),
+                world_graph=world_graph_snapshot,
+                info={
+                    "planner_info": self._compact_planner_info_for_action_history(
+                        planner_info
+                    ),
+                    "log_time": time.time(),
+                },
+            )
 
-                self.env_interface.agent_action_history[agent_id].append(
-                    action_history_object
-                )
+            self.env_interface.agent_action_history[agent_id].append(
+                action_history_object
+            )
 
         # add responses the last logged action, this means the planner will replan at the next step
         if "responses" in planner_info and any(planner_info["responses"].values()):
@@ -879,7 +903,16 @@ class EvaluationRunner:
         tracker = self._ensure_rebound_tracker(episode=current_episode)
         if tracker is not None:
             try:
-                tracker.reset(episode=current_episode)
+                perception = getattr(self.env_interface, "perception", None)
+                tracker.reset(
+                    episode=current_episode,
+                    entity_aliases=getattr(
+                        perception, "sim_handle_to_name", None
+                    ) or {},
+                    room_aliases=getattr(
+                        perception, "region_id_to_name", None
+                    ) or {},
+                )
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("OnlineReboundTracker.reset failed: %s", exc)
 
@@ -887,48 +920,82 @@ class EvaluationRunner:
         # planner sees the mutated world from the first observation on. Only
         # active when ``self.perturbation_injector`` has been set by the
         # resilience runner.
+        self.perturbation_audit = {}
         if self.perturbation_injector is not None:
+            # A retry can keep the same episode id/seed while rebuilding the
+            # environment's world graph.  Reset injector idempotence at the
+            # rollout boundary so an audit from the previous graph is never
+            # reused as evidence for this run.
+            self.perturbation_injector.begin_rollout()
+            spec = self.perturbation_injector.spec
+            self.perturbation_audit["spec"] = {
+                "kind": spec.kind,
+                "requested": float(spec.intensity),
+                "seed": int(spec.seed),
+            }
+            # Prompt rewriting is runner-owned. Clear the legacy planner hook
+            # to prevent a second rewrite in LLMPlanner.get_next_action().
+            self._clear_prompt_perturbation_hooks()
             try:
-                self.perturbation_injector.apply_world_perturbation(
-                    self.env_interface,
-                    episode=getattr(
-                        self.env_interface.env.env.env._env,
-                        "current_episode",
-                        None,
-                    ),
-                )
+                if spec.is_world_level:
+                    world_audit = (
+                        self.perturbation_injector.apply_world_perturbation_with_audit(
+                            self.env_interface,
+                            episode=current_episode,
+                        )
+                    )
+                    self.perturbation_audit["world"] = world_audit.to_dict()
             except Exception as _pi_exc:  # pragma: no cover - defensive
                 logger.warning(
                     "PerturbationInjector world-level apply failed: %s", _pi_exc
                 )
-            # Also register the prompt-level hook on each planner so that
-            # prompt paraphrase rewrites are applied downstream.
-            self._install_prompt_perturbation_hook()
+                self.perturbation_audit["world"] = {
+                    "kind": spec.kind,
+                    "requested": float(spec.intensity),
+                    "realized": 0.0,
+                    "valid": False,
+                    "reason": f"runner_world_apply_error:{type(_pi_exc).__name__}",
+                    "components": {"error": str(_pi_exc)},
+                    "applied": False,
+                }
 
         # Initialize metadata
         self.initialize_instruction_metadata(instruction, output_name)
 
         # Apply prompt-level paraphrase (if any) to the resolved instruction.
-        if self.perturbation_injector is not None:
+        if (
+            self.perturbation_injector is not None
+            and self.perturbation_injector.spec.is_prompt_level
+        ):
             try:
-                rewritten = self.perturbation_injector.rewrite_instruction(
-                    self.current_instruction,
-                    episode=getattr(
-                        self.env_interface.env.env.env._env,
-                        "current_episode",
-                        None,
-                    ),
+                rewritten, prompt_audit = (
+                    self.perturbation_injector.rewrite_instruction_with_audit(
+                        self.current_instruction,
+                        episode=current_episode,
+                    )
                 )
+                self.perturbation_audit["prompt"] = prompt_audit.to_dict()
                 if rewritten and rewritten != self.current_instruction:
                     logger.info(
                         "PerturbationInjector rewrote instruction (%s).",
                         self.perturbation_injector.spec.kind,
                     )
-                    self.current_instruction = rewritten
+                    self.policy_instruction = rewritten
+                    self.current_instruction = self.policy_instruction
             except Exception as _pi_exc:  # pragma: no cover
                 logger.warning(
                     "PerturbationInjector instruction-rewrite failed: %s", _pi_exc
                 )
+                spec = self.perturbation_injector.spec
+                self.perturbation_audit["prompt"] = {
+                    "kind": spec.kind,
+                    "requested": float(spec.intensity),
+                    "realized": 0.0,
+                    "valid": False,
+                    "reason": f"runner_prompt_rewrite_error:{type(_pi_exc).__name__}",
+                    "components": {"error": str(_pi_exc)},
+                    "applied": False,
+                }
         # Initialize sensor observations
         observations = self.env_interface.get_observations()
 
@@ -940,13 +1007,21 @@ class EvaluationRunner:
             "task_state_success": 0.0,
             "total_step_count": total_step_count,
             "num_steps": 0.0,
+            "canonical_instruction": self.canonical_instruction,
+            "policy_instruction": self.policy_instruction,
+            "reward_instruction": self.canonical_instruction,
+            # Compatibility: historically task_instruction was the only
+            # instruction field and represented the planner-visible task.
+            "task_instruction": self.policy_instruction,
         }
 
         # List to store planner logs at each step
         planner_infos = []
         planner_info: Dict[str, Any] = {}
+        latest_planner_artifacts: Dict[str, Any] = {}
         low_level_actions: List[Dict[str, Any]] = []
         should_end = False
+        rebound_transition_count = 0
 
         # A2C Critic state tracking
         prev_world_state = None
@@ -954,7 +1029,7 @@ class EvaluationRunner:
         if self.critic_enabled and self.critic is not None:
             try:
                 prev_world_state = self.world_state_builder.build(
-                    self.agents, self.current_instruction
+                    self.agents, self.policy_instruction
                 )
             except Exception as e:
                 logger.debug(f"Initial critic world state construction failed: {e}")
@@ -998,17 +1073,23 @@ class EvaluationRunner:
                             info[measure_name] = measures[measure_name].get_metric()
                 except Exception as exc:
                     logger.debug("Failed to refresh task measures before critic update: %s", exc)
+                materialize_proposition_outcome(info)
                 if self.evaluation_runner_config.save_video:
                     # Store third person frames for generating video
                     self.dvu._store_for_video(
-                        observations, planner_info["high_level_actions"]
+                        observations,
+                        planner_info["high_level_actions"],
+                        {
+                            "sim_step_count": int(info.get("num_steps", 0)),
+                            "total_step_count": int(total_step_count),
+                        },
                     )
 
                 # ==================== A2C CRITIC UPDATE ====================
                 # Update critic after environment step
                 if self.critic_enabled and self.critic is not None:
                     current_world_state = self.world_state_builder.build(
-                        self.agents, self.current_instruction
+                        self.agents, self.policy_instruction
                     )
 
                     # Enhance step_info with planning step context for LLM reward shaper
@@ -1024,15 +1105,38 @@ class EvaluationRunner:
                         step_info=enhanced_step_info,
                         planner_info=planner_info,
                         current_instruction=self.current_instruction,
+                        policy_instruction=self.policy_instruction,
+                        reward_instruction=self.canonical_instruction,
                         episode_filename=self.episode_filename,
                         loop_step_count=total_step_count,
                     )
                     prev_world_state = current_world_state
                 # ===========================================================
 
+            # Rebound observes the decision that was just executed together
+            # with the state produced by that execution.  The next planner
+            # decision is generated only afterwards, so action semantics and
+            # progress deltas belong to the same transition.
+            if self.rebound_tracker is not None and planner_info:
+                rebound_transition_count += 1
+                rebound_planner_info = copy.deepcopy(planner_info)
+                rebound_collisions = self.get_agent_collisions()
+                rebound_planner_info["agent_collisions"] = rebound_collisions
+                rebound_planner_info["agent_collision_scope"] = (
+                    "agent_pair_collision" if rebound_collisions else ""
+                )
+                try:
+                    self.rebound_tracker.observe(
+                        step=int(rebound_transition_count),
+                        planner_info=rebound_planner_info,
+                        info=info,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("OnlineReboundTracker.observe failed: %s", exc)
+
             # Get next low level actions
             low_level_actions, planner_info, should_end = self.get_low_level_actions(
-                self.current_instruction, observations, self.env_interface.world_graph
+                self.policy_instruction, observations, self.env_interface.world_graph
             )
 
             # Track replan events for LLM reward shaper alignment
@@ -1083,6 +1187,7 @@ class EvaluationRunner:
             measures_to_log = [
                 "task_percent_complete",
                 "task_state_success",
+                "proposition_satisfied_fraction",
                 "task_explanation",
             ]
             if should_end:
@@ -1094,6 +1199,11 @@ class EvaluationRunner:
                 for measure_name in measure_names:
                     if measure_name in measures:
                         info[measure_name] = measures[measure_name].get_metric()
+
+            # Keep the scalar progress field synchronized with the exact
+            # tracker frontier on every planner step, including planner-only
+            # and final steps that do not execute a low-level action.
+            materialize_proposition_outcome(info)
 
             # Add performance stats and to planner_info
             planner_info["stats"] = {
@@ -1131,23 +1241,22 @@ class EvaluationRunner:
 
             # --- Modular step health metrics ---
             planner_info["agent_collisions"] = self.get_agent_collisions()
-            try:
-                metrics = self.env_interface.env.get_metrics()
-                current_progress = metrics.get("task_percent_complete", 0.0)
-            except Exception:
-                current_progress = 0.0
-
+            planner_info["agent_collision_scope"] = (
+                "agent_pair_collision"
+                if planner_info["agent_collisions"]
+                else ""
+            )
             self.analysis_coordinator.update_step_health_metrics(
                 planner_info=planner_info,
                 agent_collisions=planner_info["agent_collisions"],
-                current_progress=current_progress,
                 critic=self.critic if hasattr(self, "critic") else None,
             )
             # ---------------------------------
 
-            # Online Rebound tracker — emits t_d/t_r events on the planner_info
-            # dict so they propagate into the per-step copy below as well as
-            # the critic-exports JSONL.
+            # Carry runner-owned compression evidence with the decision.  The
+            # tracker consumes it on the next loop together with that
+            # decision's post-execution outcome and stores the canonical
+            # transition in its episode summary.
             if self.rebound_tracker is not None:
                 # ── Drain compression events from planner into planner_info ──
                 try:
@@ -1168,29 +1277,43 @@ class EvaluationRunner:
                 except Exception as _drain_exc:
                     logger.debug("Failed to drain compression events: %s", _drain_exc)
 
-                try:
-                    self.rebound_tracker.observe(
-                        step=int(total_step_count),
-                        planner_info=planner_info,
-                        info=info,
-                    )
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("OnlineReboundTracker.observe failed: %s", exc)
-
-
             # Update agent state and action history
-            copy_planner_info = copy.deepcopy(planner_info)
-            self._drop_transient_planner_payload(
-                copy_planner_info,
-                keep_prompt_trace=True,
+            compact_planner_info = self._compact_planner_info_for_episode_history(
+                planner_info
             )
-            self.update_agent_state_history(copy_planner_info)
-            self.update_agent_action_history(copy_planner_info)
+            self.update_agent_state_history(compact_planner_info)
+            self.update_agent_action_history(compact_planner_info)
 
-            # Append planner info to history
-            if planner_infos:
-                self._drop_transient_planner_payload(planner_infos[-1])
-            planner_infos.append(copy_planner_info)
+            # Prompts/traces are only needed from the latest decision and are
+            # written separately. Never retain them for every simulation step.
+            for key in ("prompts", "traces", "actions_per_agent"):
+                if key in planner_info:
+                    latest_planner_artifacts[key] = copy.deepcopy(planner_info[key])
+
+            history_mode = str(
+                getattr(
+                    self.evaluation_runner_config,
+                    "planner_history_mode",
+                    "all",
+                )
+            ).lower()
+            if history_mode == "replan_window":
+                if not planner_infos:
+                    compact_planner_info["_history_sample_type"] = "episode_start"
+                    planner_infos.append(compact_planner_info)
+                elif self._is_planner_history_event(compact_planner_info):
+                    compact_planner_info["_history_sample_type"] = "event"
+                    if planner_infos[-1].get("_history_sample_type") == "tail":
+                        planner_infos.pop()
+                    planner_infos.append(compact_planner_info)
+                else:
+                    compact_planner_info["_history_sample_type"] = "tail"
+                    if planner_infos[-1].get("_history_sample_type") == "tail":
+                        planner_infos[-1] = compact_planner_info
+                    else:
+                        planner_infos.append(compact_planner_info)
+            else:
+                planner_infos.append(compact_planner_info)
 
             # Increment while loop step count
             total_step_count += 1
@@ -1228,6 +1351,9 @@ class EvaluationRunner:
         if self.evaluation_runner_config.save_video:
             self.dvu._make_video(play=False, postfix=self.episode_filename)
 
+        if planner_infos and latest_planner_artifacts:
+            planner_infos[-1].update(latest_planner_artifacts)
+
         # Log planner information per step
         self.analysis_coordinator.log_planner_data(
             output_dir=self.current_output_dir,
@@ -1235,6 +1361,8 @@ class EvaluationRunner:
             agents=self.agents,
             planner_infos=planner_infos,
             current_instruction=self.current_instruction,
+            canonical_instruction=self.canonical_instruction,
+            policy_instruction=self.policy_instruction,
         )
 
         # Log overall time
@@ -1243,6 +1371,78 @@ class EvaluationRunner:
 
         # Merge dictionaries
         info |= planner_info
+        # Planner metadata may contain a legacy task field.  Re-assert the
+        # instruction lineage owned by the runner after merging it.
+        info["canonical_instruction"] = self.canonical_instruction
+        info["policy_instruction"] = self.policy_instruction
+        info["reward_instruction"] = self.canonical_instruction
+        info["task_instruction"] = self.policy_instruction
+        # Planner metadata must never shadow or omit the environment-owned
+        # proposition outcome in the final episode payload.
+        materialize_proposition_outcome(info)
+        if self.perturbation_audit:
+            audit_payload = copy.deepcopy(self.perturbation_audit)
+            info["perturbation_audit"] = audit_payload
+            spec_audit = audit_payload.get("spec", {})
+            effective_audit = audit_payload.get("world") or audit_payload.get(
+                "prompt"
+            )
+            kind = str(spec_audit.get("kind", "clean") or "clean")
+            is_clean = kind.strip().lower() in {"", "clean", "baseline"}
+            if not isinstance(effective_audit, dict):
+                effective_audit = {
+                    "requested": float(spec_audit.get("requested", 0.0) or 0.0),
+                    "realized": 0.0,
+                    "valid": is_clean,
+                    "reason": (
+                        "clean_noop"
+                        if is_clean
+                        else "missing_runtime_perturbation_audit"
+                    ),
+                    "components": {},
+                    "applied": False,
+                }
+            components = effective_audit.get("components", {})
+            if not isinstance(components, dict):
+                components = {"raw": components}
+            info["perturbation_requested"] = float(
+                effective_audit.get(
+                    "requested", spec_audit.get("requested", 0.0)
+                )
+                or 0.0
+            )
+            info["perturbation_realized"] = float(
+                effective_audit.get("realized", 0.0) or 0.0
+            )
+            info["perturbation_valid"] = bool(
+                effective_audit.get("valid", False)
+            )
+            info["perturbation_reason"] = str(
+                effective_audit.get("reason", "") or ""
+            )
+            info["perturbation_components"] = json.dumps(
+                components,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+            info["perturbation_applied"] = bool(
+                effective_audit.get("applied", False)
+            )
+            component_exports = {
+                "stress_family": "perturbation_stress_family",
+                "level_index": "perturbation_level_index",
+                "variant": "perturbation_variant",
+                "complete_unit_count": "perturbation_complete_unit_count",
+                "stress_realized": "perturbation_stress_realized",
+                "text_dose": "perturbation_text_dose",
+                "alignment_valid": "perturbation_alignment_valid",
+                "bank_path": "perturbation_bank_path",
+            }
+            for component_key, output_key in component_exports.items():
+                if component_key in components:
+                    info[output_key] = components[component_key]
         if not info.get("action_sequence"):
             info["action_sequence"] = self._extract_action_sequence(planner_infos)
 
@@ -1263,6 +1463,8 @@ class EvaluationRunner:
             output_dir=self.current_output_dir,
             episode_filename=self.episode_filename,
             current_instruction=self.current_instruction,
+            canonical_instruction=self.canonical_instruction,
+            policy_instruction=self.policy_instruction,
             planner=self.planner,
             planner_infos=planner_infos,
             info=info,

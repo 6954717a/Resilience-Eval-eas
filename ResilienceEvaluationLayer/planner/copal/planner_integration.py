@@ -354,4 +354,3 @@ def generate_and_inject_copal_context(
     copal_block = f"\n{context}\n"
     planner.curr_prompt += copal_block
     planner.trace += copal_block
-

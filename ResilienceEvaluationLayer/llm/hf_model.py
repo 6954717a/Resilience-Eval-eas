@@ -269,6 +269,9 @@ class VLMHFModel(BaseLLM):
             "stop": stop,
             "n": self.generation_params.n if self.generation_params.batch_response else 1
         }
+        generation_seed = getattr(self.generation_params, "seed", None)
+        if generation_seed is not None:
+            payload["seed"] = int(generation_seed)
 
         if generation_args and "grammar_definition" in generation_args:
             # Attempt to pass grammar to vLLM. 

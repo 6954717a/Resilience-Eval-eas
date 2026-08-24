@@ -454,7 +454,6 @@ class ReboundManager:
     
     def record_error_occurred(self, fault_type: str):
         """
-        记录检测到的错误 (Err_occur)。
         Called when FaultDetector detects a fault.
         """
         self.errors_occurred += 1
@@ -462,7 +461,6 @@ class ReboundManager:
     
     def record_error_fixed(self):
         """
-        记录修复的错误 (Err_fix)。
         Called when progress increases after recovery attempt.
         """
         if self.current_progress > self._progress_before_recovery:
@@ -470,7 +468,7 @@ class ReboundManager:
     
     def get_recovery_ratio(self, epsilon: float = 1e-6) -> float:
         """
-        计算 Recovery Ratio (RR) - Eq.12 in Detailed_Metrics.tex
+        Compute the Recovery Ratio (RR), Eq. 12 in Detailed_Metrics.tex.
         
         RR = |Err_fix| / (|Err_occur| + ε)
         
@@ -480,10 +478,9 @@ class ReboundManager:
         return self.errors_fixed / (self.errors_occurred + epsilon)
     
     def record_retry(self):
-        """记录一次 retry 操作 (用于 B_epi 计算)"""
+        """Record a retry operation for B_epi."""
         self.retry_count += 1
     
     def record_backtrack(self):
-        """记录一次 backtrack 操作 (用于 B_epi 计算，权重更高)"""
+        """Record a backtrack operation for B_epi with a higher weight."""
         self.backtrack_count += 1
-

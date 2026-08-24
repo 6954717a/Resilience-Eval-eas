@@ -103,4 +103,3 @@ class PerceptionScanTool(Tool):
         except Exception as e:
             print(f"[LLMPlanner] Error during scan application: {e}")
             return f" [Scan Failed: {e}]"
-

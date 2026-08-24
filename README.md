@@ -2,249 +2,160 @@
   <img src="doc/imgs/static/logo.png" alt="Resilience Evaluation logo" width="130"/>
 </p>
 
-<h1 align="center">Resilience Evaluation</h1>
+<h1 align="center">Resilience Evaluation for Embodied Agent Systems</h1>
 
 <p align="center">
-  <b>A process-aware evaluation layer applied to embodied agent systems: rebound, stability, and graceful extensibility.</b>
+  <b>Process-aware evaluation across Rebound, Stability, and Graceful Extensibility.</b>
 </p>
 
 <p align="center">
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://www.python.org/downloads/release/python-3100/"><img src="https://img.shields.io/badge/Python-3.10+-green.svg" alt="Python 3.10+"></a>
-  <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.0+-red.svg" alt="PyTorch 2.0+"></a>
+  <a href="https://6954717a.github.io/resilience_evaluation_web/">Web</a> |
+  <a href="https://6954717a.github.io/resilience_evaluation_web/run.html">Runbook</a> |
+  <a href="https://github.com/6954717a/Resilience-Eval-eas">Code</a>
 </p>
 
-<p align="center">
-  <a href="#why-this-repository">Why</a> |
-  <a href="#main-evaluation-line">Main Line</a> |
-  <a href="#pipeline">Pipeline</a> |
-  <a href="#results">Results</a> |
-  <a href="#quick-start">Quick Start</a> |
-  <a href="#repository-layout">Layout</a>
-</p>
+EAS Resilience Evaluation is based on the Habitat 3.0 stack (Habitat-Sim 0.3.3 in the pinned PARTNR runtime); its dataset and benchmark formats follow [PARTNR Planner](https://github.com/facebookresearch/partnr-planner). Resilience Evaluation uses an LLM as the critic and calculates episode-level stage baselines from EAS execution experience.
 
----
+## Run
 
-## Why This Repository
+After completing [INSTALLATION.md](INSTALLATION.md), use the numbered [Web Runbook](https://6954717a.github.io/resilience_evaluation_web/run.html) as the canonical runtime guide. The commands below are its compact entry-point index.
 
-**Motivation:** Outcome centric metrics as Success rate tells whether an embodied-agent episode ended well. It does not tell whether the agent recovered cheaply, stayed stable under small perturbations, or maintained bounded behavior as task stress increased. Two agents can reach the same outcome while taking very different resilience paths.
+> [!IMPORTANT]
+> This repository is an evaluation overlay, not a standalone PARTNR distribution. It does not ship PARTNR's `third_party/` modules, Habitat assets, datasets, or the frozen resilience stress bank. Run these commands from a complete PARTNR-compatible checkout after syncing `ResilienceEvaluationLayer/` into its `habitat_llm/` package. See [INSTALLATION.md](INSTALLATION.md).
 
-**Resilience Evaluation Framework:** We draw on *resilience-engineering* concepts to define a reusable, process-aware evaluation framework. This repository applies the framework to embodied agent systems (EAS), packaging the code, result tables, and figure assets for a **Resilience Evaluation Layer** that instruments embodied-agent execution and turns process traces into three complementary resilience aspects: Rebound, Stability, and Graceful Extensibility.
+Follow both upstream installation sources before running:
 
-- **Rebound:** how costly it is to recover after a local disruption.
-- **Stability:** how sensitive the policy and value trajectory are to small perturbations.
-- **Graceful Extensibility:** how far the agent can operate as task stress increases.
+- [PARTNR Planner pinned installation](https://github.com/facebookresearch/partnr-planner/blob/ddfff19f4b6c098a31edea4d19e7b75db72433c2/INSTALLATION.md)
+- [Habitat-Sim installation](https://github.com/facebookresearch/habitat-sim#installation)
 
-<p align="center">
-  <img src="doc/imgs/readme/overview.png" alt="Same outcome, different resilience behavior in embodied-agent execution" width="95%"/>
-</p>
+### 1. Configure the model endpoints
 
-<p align="center">
-  <b>Figure 1.</b> Outcome-centric evaluation hides process differences; the resilience layer exposes recovery, instability, and stress-response behavior.
-</p>
+The served planner model is user supplied. `QWEN35_SERVED_MODEL` is the compatibility variable used by the current Qwen/ChatML planner config. Start the planner vLLM server on `127.0.0.1:8000` as shown in the Runbook, or override `evaluation.planner.plan_config.llm.host` and `.port`. A non-Qwen model also requires matching planner and instruction configs.
 
----
-
-## Main Evaluation Line
-
-The public result surface is intentionally compact:
-
-```text
-execution traces
-  -> synchronized event logs
-  -> stage baselines and perturbation windows
-  -> C_rec, beta, M_f(lambda), lambda_f^*
-  -> method-level resilience profile
+```bash
+export SERVED_MODEL_NAME="<your-served-model-name>"
+# Example (Qwen): SERVED_MODEL_NAME="Qwen3.5-9B-YOYO-Instruct"
+export QWEN35_SERVED_MODEL="$SERVED_MODEL_NAME"
+export DATASET="data/datasets/partnr_episodes/v0_0/val_mini.json.gz"
 ```
 
-| Aspect | Symbol | What it measures | Main evidence |
-|:-------|:-------|:-----------------|:--------------|
-| Rebound | `C_rec` | Extra cognitive, physical, and state-debt work needed to recover after a disruption. | Recovery windows and paired perturbation rows. |
-| Stability | `beta` | Change in policy/value behavior under semantic or execution perturbations. | Clean-vs-perturbed trajectory and critic/value diagnostics. |
-| Graceful Extensibility | `M_f(lambda)` | Stress-response margin as task stress `lambda` increases. | Stress sweep and task-family heatmap. |
-| Graceful Extensibility | `lambda_f^*` | Largest stress level that still satisfies the execution contract. | Family-level capacity summary. |
+The resilience run additionally uses a separate OpenAI-compatible Judge endpoint. The joint config currently selects `gpt-5.1`.
 
-Legacy code and archived tables may still use older L1/L2/L3 names. The README, figures, and manuscript-facing summaries use the current Rebound/Stability/Graceful Extensibility framing.
+```bash
+export HABITAT_LLM_BASE_URL="https://<judge-host>/v1"
+export OPENAI_API_KEY="<judge-api-key>"
+```
 
----
+### 2. How to run EAS Case Analysis
 
-## Pipeline
+Run one PARTNR episode with the served planner model:
+
+```bash
+EAS_RUN="outputs/habitat_llm/eas-78-$(date +%Y%m%d-%H%M%S)"
+python -m habitat_llm.examples.planner_demo_mp_new \
+  --config-name baselines/qwen35_centralized_zero_shot_react_summary_vllm \
+  hydra.run.dir="$EAS_RUN" habitat.dataset.data_path="$DATASET" '++episode_ids=[78]'
+```
+
+### 3. How to run Resilience EAS Case Analysis
+
+The canonical case analysis is a `10 episodes × 3 seeds × 6 stress levels = 180 cells` joint evaluation grid. If no compatible Judge-scoped StageBaseline exists, a separate clean calibration pass runs first (up to 30 additional rollouts) and is not counted in those 180 cells. Stability and Graceful Extensibility are then post-processed from the shared evaluation evidence.
+
+The frozen bank is a required target-runtime asset and is not included in this repository:
+
+```bash
+test -f evaluation/perturbation_banks/instruction_context_v6/manifest.json
+```
+
+Then run the joint experiment:
+
+```bash
+RES_RUN="outputs/habitat_llm/resilience-case-$(date +%Y%m%d-%H%M%S)"
+python -u -m habitat_llm.examples.planner_demo_expq1 \
+  --config-name experiments/resilience_joint_qwen35 \
+  hydra.run.dir="$RES_RUN" habitat.dataset.data_path="$DATASET"
+```
+
+### 4. How to run Resilience EAS Benchmark
+
+Run the first 400 entries of the PARTNR `v0_0/val` split. These are dataset indices, not episode IDs.
+
+```bash
+export PARTNR_BENCHMARK="data/datasets/partnr_episodes/v0_0/val.json.gz"
+BENCH_RUN="outputs/habitat_llm/benchmark-400-$(date +%Y%m%d-%H%M%S)"
+EPISODES="[$(seq -s, 0 399)]"
+python -m habitat_llm.examples.planner_demo_mp_new \
+  --config-name baselines/qwen35_centralized_zero_shot_react_summary_vllm \
+  hydra.run.dir="$BENCH_RUN" habitat.dataset.data_path="$PARTNR_BENCHMARK" \
+  num_proc=4 "++episode_indices=$EPISODES"
+```
+
+`num_proc=4` enables isolated workers; the current safety scheduler still admits at most one worker at a time unless its memory-gated execution config is explicitly changed.
+
+## Canonical configurations
+
+Hydra config paths below are relative to `ResilienceEvaluationLayer/conf/` in this repository and to `habitat_llm/conf/` in the runnable PARTNR checkout.
+
+| Purpose | Config | Role |
+|:--|:--|:--|
+| EAS case and 400-episode benchmark | [`baselines/qwen35_centralized_zero_shot_react_summary_vllm.yaml`](ResilienceEvaluationLayer/conf/baselines/qwen35_centralized_zero_shot_react_summary_vllm.yaml) | Served planner model and centralized motor-only baseline. |
+| Joint resilience case | [`experiments/resilience_joint_qwen35.yaml`](ResilienceEvaluationLayer/conf/experiments/resilience_joint_qwen35.yaml) | Ten episodes, three seeds, six stress levels, and ordered Stability/GE post-processing. |
+| Runtime resilience instrumentation | [`baselines/qwen35_centralized_zero_shot_react_summary_vllm_state.yaml`](ResilienceEvaluationLayer/conf/baselines/qwen35_centralized_zero_shot_react_summary_vllm_state.yaml) | Rebound metrics, deterministic critic traces, and compact state exports. |
+| Resilience defaults | [`evaluation/resilience_config.yaml`](ResilienceEvaluationLayer/conf/evaluation/resilience_config.yaml) | Perturbations, StageBaseline lifecycle, execution limits, Stability, and GE thresholds. |
+| Evaluation runner | [`evaluation/centralized_evaluation_runner_motortoolsonly_multiagent.yaml`](ResilienceEvaluationLayer/conf/evaluation/centralized_evaluation_runner_motortoolsonly_multiagent.yaml) | Centralized two-agent execution contract. |
+| Planner instructions | [`instruct/qwen_few_shot_centralized_motoronly_new.yaml`](ResilienceEvaluationLayer/conf/instruct/qwen_few_shot_centralized_motoronly_new.yaml) | Current Qwen/ChatML planning and feedback contract. |
+
+Specialized experiment configs remain available for focused studies:
+
+- [`experiments/expq1_qwen35.yaml`](ResilienceEvaluationLayer/conf/experiments/expq1_qwen35.yaml): separate Rebound, Stability, and GE validity suites.
+- [`experiments/expq1_beta_qwen35.yaml`](ResilienceEvaluationLayer/conf/experiments/expq1_beta_qwen35.yaml): Stability-focused diagnostics.
+- [`experiments/expq1_ge_qwen35.yaml`](ResilienceEvaluationLayer/conf/experiments/expq1_ge_qwen35.yaml): GE capacity diagnostics.
+- [`experiments/llm_judge_stability_compare.yaml`](ResilienceEvaluationLayer/conf/experiments/llm_judge_stability_compare.yaml): controlled Judge comparison.
+
+## Resilience metrics
+
+| Aspect | Main output | Interpretation |
+|:--|:--|:--|
+| Rebound | `C_rec` | Extra cognitive, physical, and state-debt work required after a disruption. |
+| Stability | `beta` | Policy/value-trajectory sensitivity to controlled perturbations. |
+| Graceful Extensibility | `M_f(lambda)`, `lambda_f^*` | Remaining margin and the largest stress level that satisfies the execution contract. |
 
 <p align="center">
   <img src="doc/imgs/readme/pipeline_metrics.png" alt="Resilience evaluation pipeline and metric definitions" width="95%"/>
 </p>
 
-<p align="center">
-  <b>Figure 2.</b> Non-intrusive probes log execution traces, extract resilience events, and compute process-aware metrics.
-</p>
+Stage baselines are aggregated by Judge model and episode ID. Runtime evidence remains separate from statistical post-processing. Runs save their resolved config; the resilience scheduler and isolated-worker benchmark additionally save execution manifests.
 
-| Layer | Role | Representative files |
-|:------|:-----|:---------------------|
-| Runtime evidence | Stores prompts, traces, planner logs, simulator stats, and per-episode analyses. | `ResilienceEvaluationLayer/conf/experiments/`, `Analysis_Data/Exp*` |
-| Metric extraction | Converts logs and traces into rebound, stability, and stress-response signals. | `ResilienceEvaluationLayer/evaluation/metrics/`, `ResilienceEvaluationLayer/evaluation/monitors` |
-| Aggregation | Builds Exp-Q1 validity, Exp-Q2 benchmark, and Exp-Q3 optimization tables samples. | `ResilienceEvaluationLayer/evaluation/offline_metrics_aggregator.py`, `ResilienceEvaluationLayer/evaluation/evaluation_runner` |
-| Figures | Generates GitHub-renderable PNG previews and original paper PDFs. | `Analysis_Code/` |
+## Outputs
 
+| Run | Primary evidence |
+|:--|:--|
+| EAS case | `$EAS_RUN/results/episode_result_log.csv` |
+| Resilience case | `$RES_RUN/results/resilience_joint_qwen35/joint_resilience_evaluation/raw_rollouts.csv` |
+| Resilience summaries | `$RES_RUN/results/resilience_joint_qwen35/joint_resilience_evaluation/summary.csv` and `boundary_capacity_summary.csv` |
+| Resilience suite status | `$RES_RUN/results/resilience_joint_qwen35/suite_manifest.json` |
+| PARTNR benchmark | `$BENCH_RUN/results/episode_result_log.csv` and `$BENCH_RUN/results/mp_workers/execution_manifest.json` |
 
----
-
-## Results
-
-### Metric Validity
-
-Exp-Q1 (Validity Exp) checks whether the three metrics separate process behavior that success rate alone misses.
-
-<p align="center">
-  <img src="doc/imgs/fig_q1_metric_validity_map.png" alt="Metric validity map for rebound, stability, and graceful extensibility" width="95%"/>
-</p>
-
-<p align="center">
-  <b>Figure 3.</b> Rebound, Stability, and Graceful Extensibility respond to different perturbation families.
-</p>
-
-The packaged validity surface supports three concrete readings:
-
-- Rebound cost increases under physical perturbations such as surface rewrite and object-state toggle, even when episodes can still complete.
-- Stability beta is low on clean runs and higher under filler injection or surface rewrite, showing sensitivity to small semantic changes.
-- Graceful Extensibility is represented as a stress-response curve and a task-family heatmap, so the result is not only a single success-rate number.
-
-### Benchmark Profiles
-
-Exp-Q2 (Benchmark Exp) compares ten embodied-agent methods with the same resilience profile surface.
-
-<p align="center">
-  <img src="doc/imgs/readme/benchmark_profiles.png" alt="Method resilience profiles across rebound, stability, graceful extensibility, completion, and steps" width="95%"/>
-</p>
-
-<p align="center">
-  <b>Figure 4.</b> Methods with similar task outcomes can have different process-level resilience signatures.
-</p>
-
-Packaged benchmark table from `Analysis_Data/Aggregated_Tables/calc_table_old/expq2_method_metric_heatmap_scores.csv`:
-
-| Method | Profile | `C_rec` | `beta` | `lambda_f^*` | SR | Completion | Steps |
-|:-------|--------:|--------:|-------:|-------------:|---:|-----------:|------:|
-| Baseline | 0.780 | 25.0 | 0.200 | 0.79 | 53.0 | 69.7 | 3671 |
-| CoPAL | 0.761 | 11.9 | 0.302 | 0.85 | 55.8 | 72.6 | 4846 |
-| ReAct | 0.698 | 6.5 | 0.239 | 0.50 | 38.5 | 57.8 | 3374 |
-| InnerMono | 0.591 | 43.5 | 0.149 | 0.53 | 49.5 | 67.5 | 3670 |
-| CLARE | 0.574 | 21.6 | 0.344 | 0.72 | 28.4 | 46.0 | 4249 |
-| SayCan | 0.544 | 38.5 | 0.283 | 0.72 | 57.0 | 72.6 | 4682 |
-| AgentEvolver | 0.431 | 19.2 | 0.264 | 0.21 | 48.8 | 66.8 | 3084 |
-| CycleVLA | 0.409 | 35.5 | 0.400 | 0.72 | 22.2 | 47.5 | 4688 |
-| SMART-LLM | 0.371 | 28.2 | 0.339 | 0.40 | 55.7 | 74.3 | 5085 |
-| Reflexion | 0.369 | 57.3 | 0.299 | 0.66 | 56.3 | 75.0 | 4390 |
-
-One useful sanity check is CoPAL vs. Reflexion: their success rates are close (`55.8` vs. `56.3`), but their recovery costs are not (`11.9` vs. `57.3`). The resilience layer therefore exposes a process difference that task outcome metrics flatten.
-
-### Targeted Optimization
-
-Exp-Q3 (Optimization Exp) tests whether targeting one resilience aspect changes the corresponding metric.
-
-| Target | Baseline | Optimized | Main observed change |
-|:-------|:---------|:----------|:---------------------|
-| Rebound | `C_rec = 54.31`, completion `0.967` | `C_rec = 16.48`, completion `1.000` | Recovery cost drops by `69.6%` without lowering completion. |
-| Stability | `beta_step = 0.400`, completion `0.886` | `beta_step = 0.244`, completion `0.929` | Local replanning variance drops by `38.9%`. |
-| Graceful Extensibility | completion `0.833`, formal GE incomplete | completion `0.917`, pilot GE | Completion improves under the GE pilot setting, but formal optimized-vs-baseline margin remains incomplete. |
-
-The GE row is deliberately labeled as pilot evidence. The benchmark and validity claims are landed; the GE optimization claim should be read as a targeted pilot rather than a completed formal capacity proof.
-
----
-
-## Quick Start
-
-Install the package dependencies:
+Packaged analysis can be regenerated without launching Habitat-Sim:
 
 ```bash
-git clone -c core.longpaths=true https://github.com/6954717a/Resilience-Eval-eas.git ResEval
-cd ResEval
-
-conda create -n resilience python=3.10
-conda activate resilience
-pip install -r requirements.txt
-```
-
-See [INSTALLATION.md](INSTALLATION.md) and [doc/SIMPLE_REPRODUCE.md](doc/SIMPLE_REPRODUCE.md) for the longer setup notes.
-
-Common analysis entry points:
-
-```bash
-# Rebuild Exp-Q1 plots and tables from packaged analysis inputs.
 python Analysis_Code/main/run_all_expq1.py
-
-# Rebuild the benchmark heatmap/profile view.
 python Analysis_Code/main/plot_expq2_method_metric_heatmap.py
-
-# Run a legacy rebound extractor from the theory-process layer.
-python Analysis_Code/theory_process/run_analysis_2026-01-18_rebound.py
 ```
 
-### Habitat-Sim Runtime Simulation Case
+## Repository layout
 
-<p align="center">
-  <img src="doc/imgs/readme/habitat_sim_case.png" alt="Habitat-Sim embodied agent evaluation case illustration" width="70%"/>
-</p>
+| Path | Contents |
+|:--|:--|
+| `ResilienceEvaluationLayer/` | Current PARTNR-compatible runtime overlay, metrics, monitors, planners, configs, and tests. |
+| `Analysis_Code/` | Offline aggregation, verification, tables, and figures. |
+| `Analysis_Data/` | Packaged experiment inputs and selected execution evidence. |
+| `Analysis_Results/` | Derived tables and media. |
+| `Reproduction/` | Historical compact reproduction snapshot; not the source of truth for current runtime configs. |
+| [`doc/`](doc/README.md) | Current figure/vector assets and documentation index. |
 
-<p align="center">
-  <b>Simulation Runtime Case.</b> Habitat-Sim rollout context for the embodied traces analyzed here. Vector source: <a href="doc/imgs/Habitat-Sim_Case.pdf">doc/imgs/Habitat-Sim_Case.pdf</a>.
-</p>
+## References
 
----
-
-## Repository Layout
-
-We follow the Habitat-LLM infrastructure, and form our evaluation layer based on the simulator. The **inner** `ResilienceEvaluationLayer/` directory is the main package where environments setup, EAS executes tasks, resilience probes, metric code, Hydra experiment configs, and aggregation entry points live.
-
-```text
-Resilience-Eval-eas/                              # repository root (use ResEval locally on Windows)
-|-- ResilienceEvaluationLayer/                     # core package: sim + planners + resilience evaluation
-|   |-- evaluation/                                # process-aware evaluation layer (primary)
-|   |   |-- metrics/                               # rebound/, stability/, extensibility/, degradation/
-|   |   |-- monitors/                              # runtime probes and trace hooks
-|   |   |-- perturbation/                          # perturbation specs and application
-|   |   |-- methods/                               # per-method metric helpers (e.g., CoPAL, CLARE)
-|   |   |-- core/                                  # shared evaluation core (critic, world-state helpers)
-|   |   |-- llm_evaluator/                         # offline / LLM-assisted analyzers
-|   |   |-- analysis/                              # aggregation helpers alongside top-level scripts
-|   |   |-- offline_metrics_aggregator.py          # rolls traces into experiment tables
-|   |   |-- evaluation_runner.py                   # evaluation / sweep driver
-|   |   |-- stage_baselines/                       # baseline snapshots used by staging logic
-|   |   `-- experiments/                           # experiment wiring (subpackage)
-|   |-- conf/                                      # Hydra configs
-|   |   |-- experiments/                           # Exp-Q1 / Exp-Q2 / Exp-Q3-style YAML
-|   |   |-- baselines/                             # method and planner presets
-|   |   |-- habitat_conf/                          # Habitat agent + task YAML
-|   |   `-- instruct/, planner/, llm/, ...        # prompts, tools, training, logging
-|   |-- planner/                                   # EAS LLM planners
-|   |-- agent/                                     # environment binding and rollout glue
-|   |-- tools/, sims/                              # skills, motor primitives, prompts, simulator integration
-|   |-- examples/                                  # runnable demos and our experiments
-|   |-- llm/, context/, perception/, world_model/  # model backends and supporting modules
-|   |-- finetuning/, ...                           # further connectors and Habitat-LLM extension
-|   `-- tests/                                     # unit tests for evaluation and planners
-|-- Reproduction/                                  # typical EAS reproduction
-|-- Analysis_Code/                                 # offline plots and table rebuilds (uses packaged data)
-|   |-- main/                                      # current plotting and aggregation scripts
-|   `-- theory_process/                            # legacy extractors and metric utilities
-|-- Analysis_Data/
-|   |-- Aggregated_Tables/                         # packaged Experiments CSV inputs
-|   `-- Exp1_*/                                    # packaged runtime evidence snapshots
-|-- Analysis_Results/                              # precomputed CSV/JSON and figure inputs
-|-- doc/
-|   |-- imgs/                                      # source figures, README PNG exports, paper PDFs
-|   `-- SIMPLE_REPRODUCE.md
-|-- INSTALLATION.md
-|-- requirements.txt
-`-- README.md
-```
-
----
-
-## License
-
-MIT License.
-
-## Acknowledgments
-
-- Built on the embodied-agent evaluation stack around Habitat-LLM and PARTNR-style task execution.
-- Resilience framing is inspired by process-aware resilience analysis and Woods' concepts of resilience.
+- [Habitat-Sim](https://github.com/facebookresearch/habitat-sim)
+- [Habitat-Lab](https://github.com/facebookresearch/habitat-lab)
+- [PARTNR Planner](https://github.com/facebookresearch/partnr-planner)

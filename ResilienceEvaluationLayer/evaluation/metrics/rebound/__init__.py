@@ -19,8 +19,13 @@ from .rebound_metrics import (
 )
 from .rebound_collector import ReboundCollector
 from .rebound_logging import log_rebound_metrics
-from .stage_anchor import StageAnchor, StageResolver
-from .stage_baseline import StageBaseline, StageBaselineDim, StageBaselineEstimator
+from habitat_llm.evaluation.stage_baseline import (
+    StageAnchor,
+    StageBaseline,
+    StageBaselineDim,
+    StageBaselineEstimator,
+    StageResolver,
+)
 from .target_graph import (
     ActionFrame,
     EpisodeTargetGraph,

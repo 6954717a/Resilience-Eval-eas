@@ -10,6 +10,9 @@ Consolidates metrics from ReboundManager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from .formal_cost import bounded_recovery_cost_index
+from .recovery_features import REBOUND_FORMULA_VERSION
+
 
 @dataclass
 class FailureEvent:
@@ -39,10 +42,10 @@ class StageRecoveryRecord:
 
     Dimensions
     ----------
-    ``c_rec_plan``, ``c_rec_sim`` are the plan-step and sim-step flavours
-    of the recovery cost; ``c_rec`` is the conservative maximum of the
-    two and ``runtime_overhead_ratio`` is a monitor channel (not used in
-    the scalar ``C_rec`` to avoid hardware bias).
+    ``c_rec`` is the formal covariance-aware, time-weighted recovery cost.
+    ``c_rec_plan`` and ``c_rec_sim`` retain decomposition diagnostics, while
+    ``runtime_overhead_ratio`` is monitor-only and is excluded from the
+    paper-facing scalar to avoid hardware bias.
     """
 
     stage_family: str = "other"
@@ -203,6 +206,7 @@ class ReboundMetrics:
 
     # Main formal metrics.
     c_rec: float = 0.0
+    c_rec_index_100: Optional[float] = None
     c_rec_plan: float = 0.0
     c_rec_sim: float = 0.0
 
@@ -233,6 +237,10 @@ class ReboundMetrics:
     skipped_window_count: int = 0
     c_rec_valid: bool = False
     c_rec_missing_reason: str = ""
+    c_rec_observed_lower_bound: Optional[float] = None
+    g_rec_observed_total: Optional[float] = None
+    observed_censored_window_count: int = 0
+    c_rec_formula_version: str = REBOUND_FORMULA_VERSION
     baseline_match_level: str = "none"
     stage_switches: int = 0
     stages_spanned_mean: float = 0.0
@@ -266,6 +274,8 @@ class ReboundMetrics:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to a JSON-friendly dictionary."""
+        def formal_value(value: float) -> Optional[float]:
+            return float(value) if self.c_rec_valid else None
         return {
             "b_epi": self.b_epi,
             "mttr": self.mttr,
@@ -285,26 +295,37 @@ class ReboundMetrics:
             "rstc": self.rstc,
             "total_steps": self.total_steps,
             "episode_id": self.episode_id,
-            "c_rec": self.c_rec,
-            "c_rec_plan": self.c_rec_plan,
-            "c_rec_sim": self.c_rec_sim,
-            "c_rec_cog": self.c_rec_cog,
-            "c_rec_cog_pln": self.c_rec_cog_pln,
-            "c_rec_cog_per": self.c_rec_cog_per,
-            "c_rec_cog_coord": self.c_rec_cog_coord,
-            "c_rec_phy": self.c_rec_phy,
-            "c_rec_phy_plan": self.c_rec_phy_plan,
-            "c_rec_phy_sim": self.c_rec_phy_sim,
-            "c_rec_phy_gap": self.c_rec_phy_gap,
-            "c_rec_phy_redo": self.c_rec_phy_redo,
-            "c_rec_state_debt": self.c_rec_state_debt,
-            "c_rec_state_prog": self.c_rec_state_prog,
-            "c_rec_state_goal": self.c_rec_state_goal,
-            "c_rec_state_risk": self.c_rec_state_risk,
-            "c_rec_state_modulation": self.c_rec_state_modulation,
-            "c_rec_p90": self.c_rec_p90,
-            "g_rec_total": self.g_rec_total,
-            "w_rem_star": self.w_rem_star,
+            "c_rec": formal_value(self.c_rec),
+            "c_rec_index_100": (
+                (
+                    self.c_rec_index_100
+                    if self.c_rec_index_100 is not None
+                    else bounded_recovery_cost_index(self.c_rec)
+                )
+                if self.c_rec_valid
+                else None
+            ),
+            "c_rec_plan": formal_value(self.c_rec_plan),
+            "c_rec_sim": formal_value(self.c_rec_sim),
+            "c_rec_cog": formal_value(self.c_rec_cog),
+            "c_rec_cog_pln": formal_value(self.c_rec_cog_pln),
+            "c_rec_cog_per": formal_value(self.c_rec_cog_per),
+            "c_rec_cog_coord": formal_value(self.c_rec_cog_coord),
+            "c_rec_phy": formal_value(self.c_rec_phy),
+            "c_rec_phy_plan": formal_value(self.c_rec_phy_plan),
+            "c_rec_phy_sim": formal_value(self.c_rec_phy_sim),
+            "c_rec_phy_gap": formal_value(self.c_rec_phy_gap),
+            "c_rec_phy_redo": formal_value(self.c_rec_phy_redo),
+            "c_rec_state_debt": formal_value(self.c_rec_state_debt),
+            "c_rec_state_prog": formal_value(self.c_rec_state_prog),
+            "c_rec_state_goal": formal_value(self.c_rec_state_goal),
+            "c_rec_state_risk": formal_value(self.c_rec_state_risk),
+            "c_rec_state_modulation": formal_value(
+                self.c_rec_state_modulation
+            ),
+            "c_rec_p90": formal_value(self.c_rec_p90),
+            "g_rec_total": formal_value(self.g_rec_total),
+            "w_rem_star": formal_value(self.w_rem_star),
             "runtime_overhead_ratio": self.runtime_overhead_ratio,
             "num_recovery_windows": int(self.num_recovery_windows),
             "raw_window_count": int(self.raw_window_count),
@@ -312,6 +333,12 @@ class ReboundMetrics:
             "skipped_window_count": int(self.skipped_window_count),
             "c_rec_valid": bool(self.c_rec_valid),
             "c_rec_missing_reason": self.c_rec_missing_reason,
+            "c_rec_observed_lower_bound": self.c_rec_observed_lower_bound,
+            "g_rec_observed_total": self.g_rec_observed_total,
+            "observed_censored_window_count": int(
+                self.observed_censored_window_count
+            ),
+            "c_rec_formula_version": self.c_rec_formula_version,
             "baseline_match_level": self.baseline_match_level,
             "stage_switches": int(self.stage_switches),
             "stages_spanned_mean": float(self.stages_spanned_mean),
@@ -325,7 +352,7 @@ class ReboundMetrics:
             "rebound_events": list(self.rebound_events),
         }
 
-    def get_summary_for_csv(self) -> Dict[str, float]:
+    def get_summary_for_csv(self) -> Dict[str, Any]:
         """
         Get flattened CSV metrics for public episode summaries.
 
@@ -335,20 +362,49 @@ class ReboundMetrics:
         three explanatory dimensions, and a minimal diagnosis bundle that tells
         us whether formal windows were actually available.
         """
+        def formal_value(value: float) -> Optional[float]:
+            return float(value) if self.c_rec_valid else None
+
+        index_100 = (
+            (
+                self.c_rec_index_100
+                if self.c_rec_index_100 is not None
+                else bounded_recovery_cost_index(self.c_rec)
+            )
+            if self.c_rec_valid
+            else None
+        )
         return {
-            "rebound_c_rec": float(self.c_rec),
-            "rebound_c_rec_cog": float(self.c_rec_cog),
-            "rebound_c_rec_phy": float(self.c_rec_phy),
-            "rebound_c_rec_state_debt": float(self.c_rec_state_debt),
+            "rebound_c_rec": formal_value(self.c_rec),
+            "rebound_c_rec_index_100": (
+                float(index_100) if index_100 is not None else None
+            ),
+            "rebound_c_rec_cog": formal_value(self.c_rec_cog),
+            "rebound_c_rec_phy": formal_value(self.c_rec_phy),
+            "rebound_c_rec_state_debt": formal_value(self.c_rec_state_debt),
             "rebound_num_recovery_windows": float(self.num_recovery_windows),
             "rebound_raw_window_count": float(self.raw_window_count),
             "rebound_formal_window_count": float(self.formal_window_count),
             "rebound_skipped_window_count": float(self.skipped_window_count),
             "rebound_c_rec_valid": float(bool(self.c_rec_valid)),
             "rebound_c_rec_missing_reason": self.c_rec_missing_reason,
+            "rebound_c_rec_observed_lower_bound": (
+                float(self.c_rec_observed_lower_bound)
+                if self.c_rec_observed_lower_bound is not None
+                else None
+            ),
+            "rebound_g_rec_observed_total": (
+                float(self.g_rec_observed_total)
+                if self.g_rec_observed_total is not None
+                else None
+            ),
+            "rebound_observed_censored_window_count": float(
+                self.observed_censored_window_count
+            ),
+            "rebound_c_rec_formula_version": self.c_rec_formula_version,
             "rebound_baseline_match_level": self.baseline_match_level,
-            "rebound_w_rem_star": float(self.w_rem_star),
-            "rebound_g_rec_total": float(self.g_rec_total),
+            "rebound_w_rem_star": formal_value(self.w_rem_star),
+            "rebound_g_rec_total": formal_value(self.g_rec_total),
             "rebound_baseline_loaded": float(bool(self.baseline_loaded)),
             "rebound_tracker_window_count": float(self.tracker_window_count),
             "rebound_tracker_window_open_final": float(

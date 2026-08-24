@@ -364,7 +364,7 @@ n_propositions: Optional[int] = None  # the number of propositions in the episod
 
 Constraint: **TerminalSatisfactionConstraint**
 Definition: Some propositions should remain satisfied from the time it was first satisfied to the end of the episode. This constraint is the terminal state check for those propositions.
-Example: *"wash the mug and then fill it with juice."* The mug should become dirty again before the episode finishes. is_clean(mug) does not need to remain satisfied.
+Example: *"wash the mug and then fill it with juice."* `is_clean(mug)` must still be satisfied in the final task state.
 Constraint Arguments:
 
 ```python

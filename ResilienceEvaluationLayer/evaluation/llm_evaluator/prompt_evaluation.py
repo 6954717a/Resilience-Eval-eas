@@ -323,62 +323,6 @@ Evaluate the value trajectory stability."""
     ]
 
 
-def build_degradation_evaluation_prompt(
-    performance_trajectory: List[float],
-    cliff_events: List[Dict[str, Any]],
-    recovery_events: List[Dict[str, Any]],
-    task_instruction: str
-) -> List[Dict[str, str]]:
-    """
-    Constructs evaluation prompt for Degradation (graceful degradation analysis).
-
-    This is typically used in offline analysis, not real-time reward shaping.
-
-    Args:
-        performance_trajectory: List of task_percent_complete over time
-        cliff_events: List of detected cliff events (sudden drops)
-        recovery_events: List of recovery events
-        task_instruction: Task instruction
-
-    Returns:
-        List of message dicts for LLM
-    """
-    system_prompt = """You are an expert evaluator of system degradation patterns in embodied AI.
-
-Evaluate the degradation behavior across three dimensions:
-1. **Graceful Degradation** (0-1): Did performance degrade gradually or catastrophically?
-2. **Recovery Capability** (0-1): Did the system recover from degraded states?
-3. **Stability Under Stress** (0-1): Did the system maintain stability during challenges?
-
-Return JSON:
-{
-  "graceful_score": float,
-  "recovery_score": float,
-  "stability_score": float,
-  "explanation": str
-}"""
-
-    user_content = f"""**Task:** {task_instruction}
-
-**Performance Trajectory:**
-{performance_trajectory}
-
-**Cliff Events (sudden drops > 30%):**
-{len(cliff_events)} events detected
-{cliff_events[:3] if cliff_events else "None"}
-
-**Recovery Events:**
-{len(recovery_events)} events detected
-{recovery_events[:3] if recovery_events else "None"}
-
-Evaluate the degradation pattern."""
-
-    return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content}
-    ]
-
-
 # ==============================================================================
 # Common LLM Interaction
 # ==============================================================================
