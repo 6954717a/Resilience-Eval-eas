@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="172" height="44" viewBox="0 0 172 44" role="img" aria-labelledby="title desc">
   <title id="title">Source Code</title>
   <desc id="desc">Open the Resilience Evaluation source repository</desc>
-  <rect x="0.75" y="0.75" width="170.5" height="42.5" rx="9" fill="#161B22" stroke="#8B949E" stroke-width="1.5"/>
-  <g fill="none" stroke="#F0F6FC" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="0.75" y="0.75" width="170.5" height="42.5" rx="9" fill="#5B21B6" stroke="#C4B5FD" stroke-width="1.5"/>
+  <g fill="none" stroke="#EDE9FE" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
     <path d="m20.5 15-6.5 7 6.5 7M27.5 15l6.5 7-6.5 7M26 12.5 22 31.5"/>
   </g>
   <text x="47" y="27" fill="#F0F6FC" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700" letter-spacing="0.7">SOURCE CODE</text>

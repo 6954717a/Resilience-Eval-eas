@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="172" height="44" viewBox="0 0 172 44" role="img" aria-labelledby="title desc">
   <title id="title">Project Web</title>
   <desc id="desc">Open the Resilience Evaluation project website</desc>
-  <rect x="0.75" y="0.75" width="170.5" height="42.5" rx="9" fill="#161B22" stroke="#8B949E" stroke-width="1.5"/>
-  <g fill="none" stroke="#F0F6FC" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="0.75" y="0.75" width="170.5" height="42.5" rx="9" fill="#1D4ED8" stroke="#93C5FD" stroke-width="1.5"/>
+  <g fill="none" stroke="#DBEAFE" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="24" cy="22" r="9"/>
     <path d="M15 22h18M24 13c2.5 2.4 3.8 5.4 3.8 9S26.5 28.6 24 31M24 13c-2.5 2.4-3.8 5.4-3.8 9s1.3 6.6 3.8 9"/>
   </g>
