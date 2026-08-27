@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="172" height="44" viewBox="0 0 172 44" role="img" aria-labelledby="title desc">
+  <title id="title">Paper</title>
+  <desc id="desc">Read the Resilience Evaluation paper on arXiv</desc>
+  <rect x="0.75" y="0.75" width="170.5" height="42.5" rx="9" fill="#B91C1C" stroke="#FCA5A5" stroke-width="1.5"/>
+  <g fill="none" stroke="#FEE2E2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 12.5h10l5 5v14H17z"/>
+    <path d="M27 12.5v5h5M20.5 22h8M20.5 26h8"/>
+  </g>
+  <text x="47" y="27" fill="#F0F6FC" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700" letter-spacing="0.7">PAPER</text>
+</svg>

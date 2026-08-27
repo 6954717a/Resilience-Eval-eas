@@ -11,7 +11,8 @@
 <p align="center">
   <a href="https://6954717a.github.io/resilience_evaluation_web/" title="Open the project website"><img src="doc/imgs/readme/button_web.svg" alt="Project Web" height="44"/></a>&nbsp;&nbsp;
   <a href="https://6954717a.github.io/resilience_evaluation_web/run.html" title="Open the runbook"><img src="doc/imgs/readme/button_runbook.svg" alt="Runbook" height="44"/></a>&nbsp;&nbsp;
-  <a href="https://github.com/6954717a/Resilience-Eval-eas" title="Open the source repository"><img src="doc/imgs/readme/button_code.svg" alt="Source Code" height="44"/></a>
+  <a href="https://github.com/6954717a/Resilience-Eval-eas" title="Open the source repository"><img src="doc/imgs/readme/button_code.svg" alt="Source Code" height="44"/></a>&nbsp;&nbsp;
+  <a href="https://arxiv.org/abs/2608.23839" title="Read the Paper"><img src="doc/imgs/readme/button_paper.svg" alt="Paper" height="44"/></a>
 </p>
 
 ---
